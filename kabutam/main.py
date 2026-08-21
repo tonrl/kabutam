@@ -22,13 +22,40 @@ import sys
 # ------------------------------------------------------------
 
 INDEX_MAP = {
-        "core30": "TOPIX Core30",
-        "large70": "TOPIX Large70",
-        "100": ["TOPIX Core30", "TOPIX Large70"],
-        "mid400": "TOPIX Mid400",
-        "500": ["TOPIX Core30", "TOPIX Large70", "TOPIX Mid400"],
-        "small1": "TOPIX Small 1",
-        "small2": "TOPIX Small 2",
+        "core30": {
+            "scale": "TOPIX Core30",
+            "label": "TOPIX Core30",
+        },
+
+        "large70": {
+            "scale": "TOPIX Large70",
+            "label": "TOPIX Large70",
+        },
+
+        "100": {
+            "scale": ["TOPIX Core30", "TOPIX Large70"],
+            "label": "TOPIX 100",
+        },
+
+        "mid400": {
+            "scale": "TOPIX Mid400",
+            "label": "TOPIX Mid400",
+        },
+
+        "500": {
+            "scale": ["TOPIX Core30", "TOPIX Large70", "TOPIX Mid400"],
+            "label": "TOPIX 500",
+        },
+
+        "small1": {
+            "scale": "TOPIX Small 1",
+            "label": "TOPIX Small 1",
+        },
+
+        "small2": {
+            "scale": "TOPIX Small 2",
+            "label": "TOPIX Small 2",
+        },
 }
 
 
@@ -289,18 +316,9 @@ def main():
 
     if args.index:
 
-        scale_list = INDEX_MAP[args.index]
-        index_label = {
-                "core30": "TOPIX Core30",
-                "large70": "TOPIX Large70",
-                "100": "TOPIX 100",
-                "mid400": "TOPIX Mid400",
-                "500": "TOPIX 500",
-                "small1": "TOPIX Small 1",
-                "small2": "TOPIX Small 2",
-        }[args.index]
-
-        # index_label = INDEX_MAP[args.index]
+        index_info = INDEX_MAP[args.index]
+        scale_list = index_info["scale"]
+        index_label = index_info["label"]
 
         conditions.append(
             ("ScaleCat", scale_list)
