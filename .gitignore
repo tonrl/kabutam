@@ -1,0 +1,5 @@
+__pycache__/
+jquants.db
+.venv
+kabutam.egg-info
+requirements.txt
