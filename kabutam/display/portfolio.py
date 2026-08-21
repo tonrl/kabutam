@@ -71,7 +71,7 @@ def show_portfolio(conn):
             latest_price = None
 
         # --------------------------------------------------
-        # 配当情報（EDINETデータから取得）
+        # 配当情報(EDINETデータから取得)
         # --------------------------------------------------
         edinet_row = conn.execute("""
             SELECT EDINETCode
