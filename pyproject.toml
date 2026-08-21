@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kabutam"
+version = "0.1.0"
+description = "A terminal-based stock and portfolio tracking tool"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "yfinance",
+    "wcwidth",
+    "argparse",
+    "jpholiday"
+]
+
+[project.scripts]
+kabutam = "kabutam.main:main"
