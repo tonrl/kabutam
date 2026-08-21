@@ -21,9 +21,6 @@ def show_list(
     where = []
     params = []
 
-    # for column, value in conditions:
-    #     where.append(f"{column} = ?")
-    #     params.append(value)
     for column, value in conditions:
         if isinstance(value, list):
             placeholders = ",".join(["?"] * len(value))

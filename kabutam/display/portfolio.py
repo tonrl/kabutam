@@ -87,7 +87,7 @@ def show_portfolio(conn):
                 print(
                     f"{code:<8}"
                     f"{company}"
-                    f"{account_type}"
+                    f"{fit_text(account_type, 8)}"
                     f"{shares:>10,}"
                     f"{average_price:>14,.2f}"
                     f"{latest_price:>14,.2f}"
@@ -99,7 +99,7 @@ def show_portfolio(conn):
                 print(
                     f"{code:<8}"
                     f"{company}"
-                    f"{account_type}"
+                    f"{fit_text(account_type, 8)}"
                     f"{shares:>10,}"
                     f"{average_price:>14,.2f}"
                     f"{'-':>14}"

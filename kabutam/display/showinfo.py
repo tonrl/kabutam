@@ -1,7 +1,3 @@
-from kabutam.db.connection import (
-        get_connection,
-        require_master_data
-)
 from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.stock.saveprice import ensure_recent_prices
@@ -11,10 +7,7 @@ from kabutam.display.terminal import fit_number
 # 銘柄コード検索
 # ------------------------------------------------------------
 
-def show_stock(code):
-    conn = get_connection()
-    require_master_data(conn)
-
+def show_stock(conn, code):
     company = conn.execute("""
         SELECT
             Code,
@@ -30,7 +23,6 @@ def show_stock(code):
 
     if company is None:
         print(f"銘柄コード {code} は見つかりません。")
-        conn.close()
         return
 
     edinetdata = conn.execute("""
@@ -40,25 +32,6 @@ def show_stock(code):
         FROM edinet_master 
         WHERE Code = ? 
     """, (code,)).fetchone()
-
-    # prices = conn.execute("""
-    #     SELECT
-    #         Date,
-    #         Open,
-    #         High,
-    #         Low,
-    #         Close,
-    #         Volume,
-    #         AdjOpen,
-    #         AdjHigh,
-    #         AdjLow,
-    #         AdjClose,
-    #         AdjVolume
-    #     FROM prices
-    #     WHERE Code = ?
-    #     ORDER BY Date DESC
-    #     LIMIT 3
-    # """, (code,)).fetchall()
 
     prices = ensure_recent_prices(conn, code, 3)
     if prices:
@@ -95,7 +68,6 @@ def show_stock(code):
         )
 
 
-    conn.close()
 
     print("=" * 60)
     print(f"銘柄コード : {code}")
@@ -121,17 +93,6 @@ def show_stock(code):
 
     print()
 
-    # for price in prices:
-    #     date, open_, high, low, close, volume, *_ = price
-    #
-    #     print(
-    #         f"{date:<12}"
-    #         f"{open_:>10.1f}"
-    #         f"{high:>10.1f}"
-    #         f"{low:>10.1f}"
-    #         f"{close:>10.1f}"
-    #         f"{volume:>15,.0f}"
-    #     )
     for price in prices:
         date, open_, high, low, close, volume, *_ = price
         print(
@@ -203,11 +164,6 @@ def show_stock(code):
     edinet_pbr = pbr
     current_per = None
     current_pbr = None
-    latest_price = None
-    if prices:
-        latest_price = prices[0][4]
-    current_per = None
-    current_pbr = None
 
     if latest_price is not None:
         if eps is not None and eps > 0:
@@ -234,8 +190,8 @@ def show_stock(code):
     print("バリュエーション")
     print("-" * 60)
 
-    print(f"PER            : {current_per:.2f}倍" if per is not None else "PER            : -")
-    print(f"PBR            : {current_pbr:.2f}倍" if pbr is not None else "PBR            : -")
+    print(f"PER            : {current_per:.2f}倍" if current_per is not None else "PER            : -")
+    print(f"PBR            : {current_pbr:.2f}倍" if current_pbr is not None else "PBR            : -")
     print(f"EPS            : {eps:.2f}円" if eps is not None else "EPS            : -")
     print(f"BPS            : {bps:.2f}円" if bps is not None else "BPS            : -")
     print(f"ROE            : {roe * 100:.2f}%" if roe is not None else "ROE            : -")

@@ -36,7 +36,7 @@ def ensure_prices_table_exists(conn):
         SELECT 1 FROM sqlite_master WHERE type='table' AND name='prices'
     """)
     if not cursor.fetchone():
-        print("priceテーブルを作成します")
+        print("pricesテーブルを作成します")
         create_prices_table(conn)
 
 def get_recent_prices(conn, code, days=3):

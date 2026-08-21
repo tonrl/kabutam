@@ -46,8 +46,8 @@ def fetch_prices(code, days=3, before_today=False):
     records = []
 
     for index, row in df.iterrows():
-        if row["Close"] is None or row["Close"] != row["Close"]:
-            continue
+        # if row["Close"] is None or row["Close"] != row["Close"]:
+        #     continue
 
         date = index.strftime("%Y-%m-%d")
 

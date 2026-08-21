@@ -22,9 +22,5 @@ def require_master_data(conn):
 
 def get_connection():
     db_path = get_db_path()
-    # is_new = not db_path.exists()
-    # return sqlite3.connect(db_path)
     conn =  sqlite3.connect(db_path)
-    # if is_new:
-        # pass
     return conn

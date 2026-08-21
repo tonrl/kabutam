@@ -1,7 +1,4 @@
-from .connection import get_connection
-
 def create_table_corp_data(conn):
-    conn = get_connection()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS edinet_corp_data (
             EDINETCode TEXT PRIMARY KEY,

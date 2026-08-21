@@ -80,8 +80,16 @@ def refresh_corpdata_if_needed(conn, edinet_code):
         old_disclosure_date = old[0]
 
         result = search_edinet_data(edinet_code)
+        if result is None:
+            print("EDINET DB APIに接続出来ませんでした")
+            return conn.execute(
+                    "SELECT * FROM edinet_corp_data WHERE EDINETCode = ?", (edinet_code,)
+            ).fetchone()
 
         data = result["data"]
+
+
+
         earnings = data.get("latest_earnings", {})
 
         new_disclosure_date = earnings.get(

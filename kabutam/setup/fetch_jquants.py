@@ -10,7 +10,7 @@ def fetch_and_save_jquants():
         ["pass", "show", "jpx-jquants.com/api/JPX_JQUANTS_API_KEY"],
         text=True
     ).splitlines()[0]
-    print(f"J-Quants: 銘柄データを取得しています。")
+    print("J-Quants: 銘柄データを取得しています。")
 
 
     URL = "https://api.jquants.com/v2/equities/master"

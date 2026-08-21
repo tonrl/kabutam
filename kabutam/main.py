@@ -1,18 +1,21 @@
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime
 from kabutam.display.showinfo import show_stock
 from kabutam.display.showlist import show_list
 from kabutam.db.portfolio import (
     add_buy,
     add_sell,
 )
-from kabutam.db.connection import get_connection
+from kabutam.db.connection import (
+        get_connection,
+        require_master_data
+)
 from kabutam.display.portfolio import show_portfolio
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 import sys
 
-CHECK_INTERVAL = timedelta(days=7)
+# CHECK_INTERVAL = timedelta(days=7)
 
 # ------------------------------------------------------------
 # TOPIX区分
@@ -81,9 +84,11 @@ def init_db_data():
         fetch_and_save_edinet()
         
         print("=== すべての初期化が正常に完了しました！ ===")
+        return True
 
     except Exception as e:
         print(f"初期化中にエラーが発生しました: {e}")
+        return False
 
 
 # ------------------------------------------------------------
@@ -93,6 +98,7 @@ def init_db_data():
 def main():
 
     parser = argparse.ArgumentParser(description="Kabutam 日本株検索 PF管理")
+    trade = parser.add_mutually_exclusive_group()
 
     parser.add_argument(
             "--license",
@@ -140,14 +146,14 @@ def main():
             action="store_true",
             help="ポートフォリオを表示"
     )
-    parser.add_argument(
+    trade.add_argument(
             "--buy",
             type=str,
             metavar="CODE",
             help="株式を購入"
     )
 
-    parser.add_argument(
+    trade.add_argument(
             "--sell",
             type=str,
             metavar="CODE",
@@ -186,10 +192,11 @@ def main():
 
     # initialisation
     if args.init:
-        init_db_data()
-        return
+        success = init_db_data()
+        sys.exit(0 if success else 1)
 
     conn = get_connection()
+    require_master_data(conn)
 
 
     # --------------------------------------------------
@@ -204,70 +211,54 @@ def main():
         return
 
     # --------------------------------------------------
-    # 購入
+    # 売買記録
     # --------------------------------------------------
 
-    if args.buy:
+
+    trade_action = None
+    if args.buy is not None:
+        trade_action = ("--buy", "購入", add_buy, args.buy)
+
+    elif args.sell is not None:
+        trade_action = ("--sell", "売却", add_sell, args.sell)
+
+    if trade_action is not None:
+        option, label, register, code = trade_action
 
         if args.shares is None or args.price is None:
             parser.error(
-                "--buy には --shares と --price が必要です"
+                     f"{option} には --shares と --price が必要です"
             )
 
-        date = args.date or datetime.now().date().isoformat()
-        account_type = ACCOUNT_MAP[args.account]
+        if conn.execute("SELECT 1 FROM equities_master WHERE Code = ?", (code,)).fetchone() is None:
+            parser.error(f"銘柄コード {code}は銘柄リストに存在しません")
 
-        add_buy(
+        if args.shares <= 0 or args.price < 0:
+            parser.error(f"--sharesは正の整数、--priceは0以上を指定してください")
+
+        date = args.date or datetime.now().date().isoformat()
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+
+        except ValueError:
+            parser.error(f"--dateは YYYY-MM-DD形式で指定してください")
+
+        account_type = ACCOUNT_MAP[args.account]
+        register(
             conn,
-            args.buy,
+            code,
             account_type,
             args.shares,
             args.price,
             date
         )
-
         print(
-            f"{args.buy} を "
+            f"{code} を "
             f"{args.shares}株 "
-            f"{args.price:,.2f}円で購入として登録しました。"
+            f"{args.price:,.2f}円で{label}として登録しました。"
         )
         print(f"口座       : {account_type}")
         print(f"取引日     : {date}")
-
-        conn.close()
-        return
-
-    # --------------------------------------------------
-    # 売却
-    # --------------------------------------------------
-
-    if args.sell:
-
-        if args.shares is None or args.price is None:
-            parser.error(
-                "--sell には --shares と --price が必要です"
-            )
-
-        date = args.date or datetime.now().date().isoformat()
-        account_type = ACCOUNT_MAP[args.account]
-
-        add_sell(
-            conn,
-            args.sell,
-            account_type,
-            args.shares,
-            args.price,
-            date
-        )
-
-        print(
-            f"{args.sell} を "
-            f"{args.shares}株 "
-            f"{args.price:,.2f}円で売却として登録しました。"
-        )
-        print(f"口座       : {account_type}")
-        print(f"取引日     : {date}")
-
         conn.close()
         return
 
@@ -276,7 +267,8 @@ def main():
     # --------------------------------------------------------
 
     if args.code:
-        show_stock(args.code)
+        show_stock(conn, args.code)
+        conn.close()
         return
 
 
@@ -297,7 +289,6 @@ def main():
 
     if args.index:
 
-        # index_name = INDEX_MAP[args.index]
         scale_list = INDEX_MAP[args.index]
         index_label = {
                 "core30": "TOPIX Core30",
@@ -308,6 +299,8 @@ def main():
                 "small1": "TOPIX Small 1",
                 "small2": "TOPIX Small 2",
         }[args.index]
+
+        # index_label = INDEX_MAP[args.index]
 
         conditions.append(
             ("ScaleCat", scale_list)
@@ -367,7 +360,7 @@ def main():
             hide_market=hide_market,
             hide_scale=hide_scale
         )
-
+        conn.close()
         return
 
 
@@ -376,7 +369,9 @@ def main():
     # → 日本取引所グループ
     # --------------------------------------------------------
 
-    show_stock("86970")
+    show_stock(conn, "86970")
+    conn.close()
+
 
 
 if __name__ == "__main__":
