@@ -1,4 +1,8 @@
 from kabutam.db.portfolio import get_holdings
+
+from kabutam.db.schema import create_table_corp_data
+from kabutam.edinet.get_corpdata import get_corpdata
+
 from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.display.terminal import fit_text
 
@@ -13,6 +17,8 @@ def show_portfolio(conn):
 
     total_value = 0
     total_cost = 0
+    total_dividend_pre_tax = 0
+    total_dividend_post_tax = 0
 
     WIDTH = 95
 
@@ -65,6 +71,24 @@ def show_portfolio(conn):
             latest_price = None
 
         # --------------------------------------------------
+        # 配当情報（EDINETデータから取得）
+        # --------------------------------------------------
+        edinet_row = conn.execute("""
+            SELECT EDINETCode
+            FROM edinet_master
+            WHERE Code = ?
+        """, (code,)).fetchone()
+
+        forecast_dividend = None
+        if edinet_row and edinet_row[0]:
+            edinetcode = edinet_row[0]
+            create_table_corp_data(conn)
+            corpdata = get_corpdata(conn, edinetcode)
+            if corpdata and len(corpdata) > 13:
+                # index 13: forecast_dividend_per_share (予想年間配当)
+                forecast_dividend = corpdata[13]
+
+        # --------------------------------------------------
         # 口座ごとに表示
         # --------------------------------------------------
 
@@ -81,6 +105,16 @@ def show_portfolio(conn):
                 total_value += value
             else:
                 value = None
+
+            # 配当金・税金計算
+            if forecast_dividend is not None:
+                div_pre_tax = shares * forecast_dividend
+                # NISA口座は非課税(0%)、その他は20.315%
+                is_nisa = "NISA" in account_type.upper()
+                tax_rate = 0.0 if is_nisa else 0.20315
+                div_post_tax = div_pre_tax * (1 - tax_rate)
+                total_dividend_pre_tax += div_pre_tax
+                total_dividend_post_tax += div_post_tax
 
             if value is not None:
 
@@ -123,5 +157,17 @@ def show_portfolio(conn):
             f"評価損益率     : "
             f"{profit / total_cost * 100:+.2f}%"
         )
+
+    print("=" * WIDTH)
+    print(f"年間配当金（税引前）: {total_dividend_pre_tax:,.0f} 円")
+    print(f"年間配当金（税引後）: {total_dividend_post_tax:,.0f} 円")
+
+    if total_cost > 0:
+        yield_on_cost = (total_dividend_pre_tax / total_cost) * 100
+        print(f"配当利回り（取得額ベース）: {yield_on_cost:.2f}%")
+
+    if total_value > 0:
+        yield_on_value = (total_dividend_pre_tax / total_value) * 100
+        print(f"配当利回り（評価額ベース）: {yield_on_value:.2f}%")
 
     print("=" * WIDTH)

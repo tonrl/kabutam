@@ -1,8 +1,8 @@
 # config.py
-
+import functools
 import subprocess
 
-
+@functools.lru_cache(maxsize=1)
 def get_edinet_api_key():
     try:
         result = subprocess.run(
