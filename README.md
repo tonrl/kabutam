@@ -11,6 +11,8 @@ Terminal-based stock and portfolio tracking tool for Japanese stocks.
 
 ### For Arch Linux (via PKGBUILD)
 ```bash
+git clone https://aur.archlinux.org/kabutam.git
+cd kabutam
 makepkg -si
 ```
 
