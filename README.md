@@ -17,7 +17,7 @@ Terminal-based stock and portfolio tracking tool for Japanese stocks.
 
 ### For Arch Linux (via PKGBUILD)
 ```bash
-git clone [https://aur.archlinux.org/kabutam.git](https://aur.archlinux.org/kabutam.git)
+git clone https://aur.archlinux.org/kabutam.git
 cd kabutam
 makepkg -si
 ```
@@ -25,7 +25,7 @@ makepkg -si
 ### For Development (Virtual Environment)
 
 ```bash
-git clone [https://codeberg.org/tonrl/kabutam.git](https://codeberg.org/tonrl/kabutam.git)
+git clone https://codeberg.org/tonrl/kabutam.git
 cd kabutam
 python -m venv .venv
 source .venv/bin/activate
