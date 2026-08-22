@@ -31,10 +31,21 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
+## Configuration
+
+このツールは、EDINET等のAPIキーの管理にパスワードマネージャー (`pass`) を使用します。
+事前に各公式サイト（[J-Quants](https://jpx-jquants.com/) / [EDINET DB](https://edinetdb.jp/)）等でキーを取得し、`pass` コマンドで登録してください
+
+```bash
+# J-Quants API キーの登録
+pass insert jpx-jquants.com/api/JPX_JQUANTS_API_KEY
+# EDINET DB API キーの登録
+pass insert ednetdb/api/EDNET_DB_API_KEY
+```
 
 ## Usage
 
-```
+```bash
 # ヘルプの表示
 kabutam --help
 
@@ -51,7 +62,7 @@ kabutam --portfolio
 kabutam --license
 ```
 ## Example output
-```
+```bash
 $ kabutam --portfolio                                                                       7:48 ✔ 
 ===============================================================================================
 ポートフォリオ
