@@ -1,5 +1,9 @@
 __pycache__/
+*.py[cod]
 jquants.db
-.venv
+*.db
+.venv/
 kabutam.egg-info
 requirements.txt
+.coverage
+.pytest_cache/

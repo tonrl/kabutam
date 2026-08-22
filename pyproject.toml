@@ -17,3 +17,7 @@ dependencies = [
 
 [project.scripts]
 kabutam = "kabutam.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kabutam*"]
