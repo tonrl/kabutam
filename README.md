@@ -23,7 +23,7 @@ yay -S kabutam
 # または
 paru -S kabutam
 ```
-### PKGBUILDからビルドする場合
+#### PKGBUILDからビルドする場合
 ```bash
 git clone https://aur.archlinux.org/kabutam.git
 cd kabutam
