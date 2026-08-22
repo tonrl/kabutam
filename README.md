@@ -7,11 +7,17 @@ Terminal-based stock and portfolio tracking tool for Japanese stocks.
 - Track your portfolio directly from the terminal
 - Lightweight and easy to use
 
+## Prerequisites
+- Python 3.9 or later
+- pass (パスワード管理ツール: 認証情報の管理に利用)
+- Git (ソースからのインストール時)
+
+
 ## Installation
 
 ### For Arch Linux (via PKGBUILD)
 ```bash
-git clone https://aur.archlinux.org/kabutam.git
+git clone [https://aur.archlinux.org/kabutam.git](https://aur.archlinux.org/kabutam.git)
 cd kabutam
 makepkg -si
 ```
@@ -19,6 +25,8 @@ makepkg -si
 ### For Development (Virtual Environment)
 
 ```bash
+git clone [https://codeberg.org/tonrl/kabutam.git](https://codeberg.org/tonrl/kabutam.git)
+cd kabutam
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
