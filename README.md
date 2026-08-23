@@ -77,6 +77,7 @@ pass insert ednetdb/api/EDNET_DB_API_KEY
 - [KeePassXC](https://keepassxc.org/)
 - [GNOME Keyring](https://gitlab.gnome.org/GNOME/gnome-keyring)
 - [KWallet](https://apps.kde.org/kwalletmanager5/)
+
 Kabutam はこれらのパスワードマネージャーと直接連携するのではなく、[D-Bus Secret Service API](https://specifications.freedesktop.org/secret-service/latest/)を通じてsecretを取得します。
 
 
