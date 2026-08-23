@@ -1,4 +1,5 @@
 from kabutam.db.schema import create_table_corp_data
+from kabutam.db.connection import require_edi_data
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.display.terminal import fit_number
@@ -27,7 +28,7 @@ def show_stock(conn, code):
 
     edinetdata = conn.execute("""
         SELECT 
-            EDINETCode, 
+            EDINETCode,
             ListingStatus 
         FROM edinet_master 
         WHERE Code = ? 
@@ -59,60 +60,11 @@ def show_stock(conn, code):
     # EDINET 情報
     corpdata = None
     if edinetcode is not None:
+        if not require_edi_data(conn):
+            create_table_corp_data(conn)
 
-        create_table_corp_data(conn)
+        corpdata = get_corpdata(conn, edinetcode)
 
-        corpdata = get_corpdata(
-            conn,
-            edinetcode
-        )
-
-
-
-    print("=" * 60)
-    print(f"銘柄コード : {code}")
-    print(f"会社名     : {name}")
-    print(f"英語名     : {name_en}")
-    print(f"業種       : {sector33}")
-    print(f"規模区分   : {scale}")
-    print(f"市場       : {market}")
-    print(f"EDI Code   : {edinetcode}")
-    print("=" * 60)
-
-    print("過去3営業日の株価")
-    print("-" * 67)
-
-    print(
-        f"{'Date':<12}"
-        f"{'Open':>10}"
-        f"{'High':>10}"
-        f"{'Low':>10}"
-        f"{'Close':>10}"
-        f"{'Volume':>15}"
-    )
-
-    print()
-
-    for price in prices:
-        date, open_, high, low, close, volume, *_ = price
-        print(
-                f"{date:<12}"
-                f"{fit_number(open_, 10)}"
-                f"{fit_number(high, 10)}"
-                f"{fit_number(low, 10)}"
-                f"{fit_number(close, 10)}"
-                f"{fit_number(volume, 15, 0)}"
-        )
-
-
-    print("-" * 67)
-    if corpdata is None:
-        print("EDINET財務情報")
-        print("-" * 60)
-        print("取得できませんでした。")
-        return
-
-    print("EDINET財務情報")
     (
             edinet_code,
             disclosure_date,
@@ -181,7 +133,46 @@ def show_stock(conn, code):
                 forecast_dividend_per_share / latest_price
         )
 
+    print("=" * 60)
+    print(f"銘柄コード : {code}")
+    print(f"会社名     : {name}")
+    print(f"英語名     : {name_en}")
+    print(f"業種       : {sector33}")
+    print(f"規模区分   : {scale}")
+    print(f"市場       : {market}")
+    print(f"EDI Code   : {edinetcode}")
+    print("=" * 60)
 
+    print("過去3営業日の株価")
+    print("-" * 67)
+    print(
+            f"{'Date':<12}"
+            f"{'Open':>10}"
+            f"{'High':>10}"
+            f"{'Low':>10}"
+            f"{'Close':>10}"
+            f"{'Volume':>15}"
+            )
+
+    for price in prices:
+        date, open_, high, low, close, volume, *_ = price
+        print(
+                f"{date:<12}"
+                f"{fit_number(open_, 10)}"
+                f"{fit_number(high, 10)}"
+                f"{fit_number(low, 10)}"
+                f"{fit_number(close, 10)}"
+                f"{fit_number(volume, 15, 0)}"
+        )
+    print()
+    print("-" * 67)
+    if corpdata is None:
+        print("EDINET財務情報")
+        print("-" * 60)
+        print("取得できませんでした。")
+        return
+
+    print("EDINET財務情報")
     print(f"決算開示日     : {disclosure_date}")
     print(f"会計年度       : {fiscal_year}")
     print(f"四半期         : {quarter}")

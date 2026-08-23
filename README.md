@@ -8,9 +8,10 @@ Terminal-based stock and portfolio tracking tool for Japanese stocks.
 - Lightweight and easy to use
 
 ## Prerequisites
-- Python 3.9 or later
-- pass (パスワード管理ツール: 認証情報の管理に利用)
+- Python 3.11 or later
 - Git (ソースからのインストール時)
+- `pass` (pass を使用する場合)
+- `libsecret` (`secret-tool`) (Secret Serviceを使用する場合)
 
 
 ## Installation
@@ -30,6 +31,11 @@ cd kabutam
 makepkg -si
 ```
 
+### PyPIからのインストール
+```bash
+pip install kabutam
+```
+
 ### For Development (Virtual Environment)
 
 ```bash
@@ -41,15 +47,71 @@ pip install -e .
 ```
 ## Configuration
 
-このツールは、EDINET等のAPIキーの管理にパスワードマネージャー (`pass`) を使用します。
-事前に各公式サイト（[J-Quants](https://jpx-jquants.com/) / [EDINET DB](https://edinetdb.jp/)）等でキーを取得し、`pass` コマンドで登録してください
+Kabutamでは、EDINET DBやJ-QuantsなどのAPIキーを `secret backend` を使用して管理します。
 
+デフォルトでは [pass](https://www.passwordstore.org/) を使用しますが、[D-Bus Secret Service API](https://specifications.freedesktop.org/secret-service/latest/)に対応したパスワードマネージャーも利用できます。
+
+事前に各公式サイト（[J-Quants](https://jpx-jquants.com/) / [EDINET DB](https://edinetdb.jp/)）等でAPIキーを取得し、選択した`secret backend` に登録してください
+
+### pass (デフォルト)
+J-QuantsおよびEDINET DBのAPIキーを取得し、`pass` に登録してください。
+
+#### APIキーの登録
+##### J-Quants API キーの登録
 ```bash
-# J-Quants API キーの登録
 pass insert jpx-jquants.com/api/JPX_JQUANTS_API_KEY
-# EDINET DB API キーの登録
+```
+##### EDINET DB API キーの登録
+```bash
 pass insert ednetdb/api/EDNET_DB_API_KEY
 ```
+設定ファイルを作成しない場合、`pass` がデフォルトで使用されます。
+
+
+### Secret Service対応パスワードマネージャー
+
+`pass` の代わりに、[D-Bus Secret Service API](https://specifications.freedesktop.org/secret-service/latest/)に対応した
+パスワードマネージャーを利用できます。
+
+対応例:
+- [KeePassXC](https://keepassxc.org/)
+- [GNOME Keyring](https://gitlab.gnome.org/GNOME/gnome-keyring)
+- [KWallet](https://apps.kde.org/kwalletmanager5/)
+Kabutam はこれらのパスワードマネージャーと直接連携するのではなく、[D-Bus Secret Service API](https://specifications.freedesktop.org/secret-service/latest/)を通じてsecretを取得します。
+
+
+#### APIキーの登録
+
+##### J-Quants API キーの登録
+```bash
+secret-tool store \
+    --label="Kabutam J-Quants API Key" \
+    service kabutam \
+    username JPX_JQUANTS_API_KEY
+```
+##### EDINET DB API キーの登録
+```bash
+secret-tool store \
+    --label="Kabutam EDINET DB API Key" \
+    service kabutam \
+    username EDNET_DB_API_KEY
+```
+Secret Serviceを使用する場合は、Kabutamの設定ファイルでSecret Service backendを選択してください。
+
+### Configuration file
+設定ファイルはXDG Base Directory Specificationに従い、通常は以下に配置されます。
+
+```text
+~/.config/kabutam/config.toml
+```
+```toml
+[secrets]
+backend = "secretservice"
+
+[secrets.secretservice]
+service = "kabutam"
+```
+`service` の値はSecret Serviceに登録した `service` 属性と一致している必要があります。
 
 ## Usage
 

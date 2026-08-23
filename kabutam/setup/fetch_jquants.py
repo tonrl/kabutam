@@ -1,15 +1,15 @@
 import subprocess
 import requests
 from kabutam.db.connection import get_connection
+from kabutam.config import get_secret
+
+
 
 def fetch_and_save_jquants():
     print("J-Quants から銘柄マスタを取得しています...")
+    JPX_API_KEY = get_secret("JPX_JQUANTS_API_KEY")
     
     # passからJ-Quants APIキーを取得
-    JPX_API_KEY = subprocess.check_output(
-        ["pass", "show", "jpx-jquants.com/api/JPX_JQUANTS_API_KEY"],
-        text=True
-    ).splitlines()[0]
     print("J-Quants: 銘柄データを取得しています。")
 
 

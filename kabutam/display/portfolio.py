@@ -1,10 +1,34 @@
+import sys
+import threading
+import time
 from kabutam.db.portfolio import get_holdings
-
 from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
-
 from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.display.terminal import fit_text
+
+def show_spinner(stop_event, current_ref, total):
+    symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    i = 0
+
+    while not stop_event.is_set():
+
+        current = current_ref[0]
+
+        print(
+            f"\r株価情報を更新しています... "
+            f"{symbols[i % len(symbols)]} "
+            f"{current} / {total}",
+            end="",
+            flush=True
+        )
+
+        i += 1
+        time.sleep(0.1)
+
+    # 行を消す
+    print("\r" + " " * 60 + "\r", end="", flush=True)
 
 
 def show_portfolio(conn):
@@ -19,8 +43,39 @@ def show_portfolio(conn):
     total_cost = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
-
     WIDTH = 95
+    # --------------------------------------------------
+    # 表示前に全銘柄の最新株価を取得
+    # --------------------------------------------------
+    latest_prices = {}
+
+    codes = list(holdings.keys())
+    total_codes = len(codes)
+
+    current_ref = [0]
+    stop_event = threading.Event()
+
+    spinner = threading.Thread(
+        target=show_spinner,
+        args=(stop_event, current_ref, total_codes),
+    )
+
+    spinner.start()
+
+    try:
+        for code in holdings:
+            prices = ensure_recent_prices(conn,code,1)
+            if prices:
+                latest_prices[code] = prices[0][4]
+            else:
+                latest_prices[code] = None
+            current_ref[0] += 1
+    finally:
+        stop_event.set()
+        spinner.join()
+
+    #-----------------------------------------------------
+
 
     print("=" * WIDTH)
     print("ポートフォリオ")
@@ -55,21 +110,8 @@ def show_portfolio(conn):
         company = fit_text(name, 25)
 
         # --------------------------------------------------
-        # 最新株価
-        # 銘柄ごとに1回だけ取得
-        # --------------------------------------------------
 
-        prices = ensure_recent_prices(
-            conn,
-            code,
-            1
-        )
-
-        if prices:
-            latest_price = prices[0][4]
-        else:
-            latest_price = None
-
+        latest_price = latest_prices.get(code)
         # --------------------------------------------------
         # 配当情報(EDINETデータから取得)
         # --------------------------------------------------

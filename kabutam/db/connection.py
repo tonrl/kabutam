@@ -20,6 +20,14 @@ def require_master_data(conn):
                 "先に `kabutam --init` を実行してください。"
         )
 
+def require_edi_data(conn):
+    row = conn.execute("""
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'table' AND name = 'edinet_corp_data'
+    """).fetchone()
+    return row is not None
+
+
 def get_connection():
     db_path = get_db_path()
     conn =  sqlite3.connect(db_path)

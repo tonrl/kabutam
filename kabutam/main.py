@@ -142,7 +142,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.0\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
+        version="%(prog)s 0.1.7\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
         )
 
     parser.add_argument(
