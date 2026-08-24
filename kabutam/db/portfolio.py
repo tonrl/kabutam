@@ -15,7 +15,29 @@ def create_table_portfolio(conn):
     """)
 
     conn.commit()
+def get_holding_shares(conn, code, account_type):
+    create_table_portfolio(conn)
 
+    rows = conn.execute("""
+        SELECT
+            transaction_type,
+            shares
+        FROM portfolio_transactions
+        WHERE Code = ?
+          AND account_type = ?
+        ORDER BY transaction_date, id
+    """, (code, account_type)).fetchall()
+
+    holding_shares = 0
+
+    for transaction_type, shares in rows:
+        if transaction_type == "BUY":
+            holding_shares += shares
+
+        elif transaction_type == "SELL":
+            holding_shares -= shares
+
+    return holding_shares
 
 def add_buy(conn, code, account_type, shares, price, date):
     create_table_portfolio(conn)
@@ -43,6 +65,17 @@ def add_buy(conn, code, account_type, shares, price, date):
 
 def add_sell(conn, code, account_type, shares, price, date):
     create_table_portfolio(conn)
+
+    holding_shares = get_holding_shares(
+        conn,
+        code,
+        account_type
+    )
+    if shares > holding_shares:
+        raise ValueError(
+            f"{code} の保有株数は {holding_shares}株です。"
+            f"{shares}株は売却できません。"
+        )
 
     conn.execute("""
         INSERT INTO portfolio_transactions (
@@ -132,6 +165,13 @@ def get_holdings(conn):
         elif transaction_type == "SELL":
             if holding["shares"] <= 0:
                 continue
+
+            if shares > holding["shares"]:
+                raise ValueError(
+                    f"{code} の保有株数 {holding['shares']}株に対して、"
+                    f"{shares}株の売却記録があります。"
+                )
+
             sell_shares = min(
                     shares,
                     holding["shares"]

@@ -7,7 +7,7 @@ CHECK_INTERVAL = timedelta(days=7)
 # Corp Data
 # -----------------------------------------------------------
 
-def get_corpdata(conn, edinet_code):
+def get_corpdata(conn, edinet_code, message_ref=None):
 
     row = conn.execute("""
         SELECT *
@@ -17,8 +17,8 @@ def get_corpdata(conn, edinet_code):
 
     # DBに存在しない
     if row is None:
-        print("DBに財務データがありません。")
-        print("EDINET DBから取得しています...")
+        if message_ref is not None:
+            message_ref[0] = "EDINET DBから財務データを取得しています..."
 
         return fetch_and_save_corpdata(
             conn,
@@ -40,8 +40,10 @@ def get_corpdata(conn, edinet_code):
     )
 
 
-def fetch_and_save_corpdata(conn, edinet_code):
-    print("EDINET DB APIから財務データを取得しています...") 
+def fetch_and_save_corpdata(conn, edinet_code, message_ref=None):
+    if message_ref is not None:
+        message_ref[0] = "EDINET DB APIから財務データを取得しています..."
+
     result = search_edinet_data(edinet_code) 
     if result is None:
         print("財務データの取得に失敗しました")

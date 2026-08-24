@@ -83,3 +83,18 @@ def get_edinet_api_key() -> str:
 @functools.lru_cache(maxsize=1)
 def get_jquants_api_key() -> str:
     return get_secret("JPX_JQUANTS_API_KEY")
+
+
+def get_color_scheme() -> str:
+    config = load_config()
+
+    display_config = config.get("display", {})
+    scheme = display_config.get("color_scheme", "japan")
+
+    if scheme not in ("japan", "western", "none"):
+        raise RuntimeError(
+            f"未知のcolor_schemeです: {scheme!r}. "
+            "利用可能なcolor_scheme: japan, western, none"
+        )
+
+    return scheme

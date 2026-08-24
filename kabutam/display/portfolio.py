@@ -1,11 +1,13 @@
 import sys
 import threading
 import time
+import csv
 from kabutam.db.portfolio import get_holdings
 from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.display.terminal import fit_text
+from kabutam.display.colors import (colorise_profit)
 
 def show_spinner(stop_event, current_ref, total):
     symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -29,9 +31,80 @@ def show_spinner(stop_event, current_ref, total):
 
     # 行を消す
     print("\r" + " " * 60 + "\r", end="", flush=True)
+def show_portfolio_csv(conn):
 
+    holdings = get_holdings(conn)
 
-def show_portfolio(conn):
+    if not holdings:
+        return
+
+    writer = csv.writer(sys.stdout,
+                        lineterminator="\n",
+    )
+
+    writer.writerow([
+        "Code",
+        "Company",
+        "Account",
+        "Shares",
+        "AveragePrice",
+        "Price",
+        "Profit",
+        "Value",
+    ])
+
+    # 最新株価を取得
+    latest_prices = {}
+
+    for code in holdings:
+        prices = ensure_recent_prices(conn, code, 1)
+
+        if prices:
+            latest_prices[code] = prices[0][4]
+        else:
+            latest_prices[code] = None
+
+    for code, accounts in holdings.items():
+
+        row = conn.execute("""
+            SELECT CoName
+            FROM equities_master
+            WHERE Code = ?
+        """, (code,)).fetchone()
+
+        name = row[0] if row else "不明"
+
+        latest_price = latest_prices.get(code)
+
+        for account_type, holding in accounts.items():
+
+            shares = holding["shares"]
+            average_price = holding["average_price"]
+
+            if latest_price is not None:
+
+                value = shares * latest_price
+                profit = (
+                    latest_price - average_price
+                ) * shares
+
+            else:
+
+                value = None
+                profit = None
+
+            writer.writerow([
+                code,
+                name,
+                account_type,
+                shares,
+                average_price,
+                latest_price,
+                profit,
+                value,
+            ])
+
+def show_portfolio(conn, mode="normal"):
 
     holdings = get_holdings(conn)
 
@@ -43,7 +116,36 @@ def show_portfolio(conn):
     total_cost = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
-    WIDTH = 95
+    # WIDTH = 95
+    WIDTH_CODE = 8
+    WIDTH_COMPANY = 25
+    WIDTH_ACCOUNT = 8
+    WIDTH_SHARES = 10
+    WIDTH_AVG_PRICE = 14
+    WIDTH_PRICE = 14
+    WIDTH_PROFIT = 16
+    WIDTH_VALUE = 16
+
+    if (mode=="minimal"):
+        WIDTH = (
+            WIDTH_CODE
+            + WIDTH_COMPANY
+            + WIDTH_ACCOUNT
+            + WIDTH_SHARES
+            + WIDTH_AVG_PRICE
+            + WIDTH_PRICE
+        )
+    else:
+        WIDTH = (
+            WIDTH_CODE
+            + WIDTH_COMPANY
+            + WIDTH_ACCOUNT
+            + WIDTH_SHARES
+            + WIDTH_AVG_PRICE
+            + WIDTH_PRICE
+            + WIDTH_PROFIT
+            + WIDTH_VALUE
+        )
     # --------------------------------------------------
     # 表示前に全銘柄の最新株価を取得
     # --------------------------------------------------
@@ -80,16 +182,26 @@ def show_portfolio(conn):
     print("=" * WIDTH)
     print("ポートフォリオ")
     print("=" * WIDTH)
-
-    print(
-        f"{'Code':<8}"
-        f"{fit_text('Company', 25)}"
-        f"{fit_text('Account', 8)}"
-        f"{'Shares':>10}"
-        f"{'Avg Price':>14}"
-        f"{'Price':>14}"
-        f"{'Value':>16}"
-    )
+    if (mode=="minimal"):
+        print(
+            f"{'Code':<{WIDTH_CODE}}"
+            f"{fit_text('Company', WIDTH_COMPANY)}"
+            f"{fit_text('Account', WIDTH_ACCOUNT)}"
+            f"{'Shares':>{WIDTH_SHARES}}"
+            f"{'Avg Price':>{WIDTH_AVG_PRICE}}"
+            f"{'Price':>{WIDTH_PRICE}}"
+        )
+    else:
+        print(
+            f"{'Code':<{WIDTH_CODE}}"
+            f"{fit_text('Company', WIDTH_COMPANY)}"
+            f"{fit_text('Account', WIDTH_ACCOUNT)}"
+            f"{'Shares':>{WIDTH_SHARES}}"
+            f"{'Avg Price':>{WIDTH_AVG_PRICE}}"
+            f"{'Price':>{WIDTH_PRICE}}"
+            f"{'P/L':>{WIDTH_PROFIT}}"
+            f"{'Value':>{WIDTH_VALUE}}"
+        )
 
     print("-" * WIDTH)
 
@@ -145,8 +257,15 @@ def show_portfolio(conn):
             if latest_price is not None:
                 value = shares * latest_price
                 total_value += value
+
+                profit = (latest_price - average_price) * shares
+                profit_text = f"{profit:+,.0f}"
+                profit_text = f"{profit_text:>16}"
+                profit_text = colorise_profit(profit, profit_text)
+
             else:
                 value = None
+                profit = None
 
             # 配当金・税金計算
             if forecast_dividend is not None:
@@ -158,17 +277,28 @@ def show_portfolio(conn):
                 total_dividend_pre_tax += div_pre_tax
                 total_dividend_post_tax += div_post_tax
 
-            if value is not None:
 
-                print(
-                    f"{code:<8}"
-                    f"{company}"
-                    f"{fit_text(account_type, 8)}"
-                    f"{shares:>10,}"
-                    f"{average_price:>14,.2f}"
-                    f"{latest_price:>14,.2f}"
-                    f"{value:>16,.0f}"
-                )
+            if value is not None:
+                if (mode == "minimal"):
+                    print(
+                            f"{code:<{WIDTH_CODE}}"
+                            f"{company}"
+                            f"{fit_text(account_type, WIDTH_ACCOUNT)}"
+                            f"{shares:>{WIDTH_SHARES},}"
+                            f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{latest_price:>{WIDTH_PRICE},.2f}"
+                    )
+                else:
+                    print(
+                            f"{code:<{WIDTH_CODE}}"
+                            f"{company}"
+                            f"{fit_text(account_type, WIDTH_ACCOUNT)}"
+                            f"{shares:>{WIDTH_SHARES},}"
+                            f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{latest_price:>{WIDTH_PRICE},.2f}"
+                            f"{profit_text:>{WIDTH_PROFIT}}"
+                            f"{value:>{WIDTH_VALUE},.0f}"
+                    )
 
             else:
 
@@ -179,6 +309,7 @@ def show_portfolio(conn):
                     f"{shares:>10,}"
                     f"{average_price:>14,.2f}"
                     f"{'-':>14}"
+                    f"{'-':>16}"
                     f"{'-':>16}"
                 )
 
@@ -192,12 +323,22 @@ def show_portfolio(conn):
 
     print(f"取得総額       : {total_cost:,.0f} 円")
     print(f"保有資産額     : {total_value:,.0f} 円")
-    print(f"評価損益       : {profit:+,.0f} 円")
+    # print(f"評価損益       : {profit:+,.0f} 円")
+    print(
+            "評価損益       : "+ colorise_profit(
+                profit,
+                f"{profit:+,.0f} 円"
+            )
+    )
 
     if total_cost > 0:
+        profit_rate = profit / total_cost * 100
         print(
-            f"評価損益率     : "
-            f"{profit / total_cost * 100:+.2f}%"
+                "評価損益率     : "
+                + colorise_profit(
+                    profit_rate,
+                    f"{profit_rate:+.2f}%"
+                )
         )
 
     print("=" * WIDTH)

@@ -10,7 +10,7 @@ from kabutam.db.connection import (
         get_connection,
         require_master_data
 )
-from kabutam.display.portfolio import show_portfolio
+from kabutam.display.portfolio import (show_portfolio, show_portfolio_csv)
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 import sys
@@ -124,8 +124,18 @@ def init_db_data():
 
 def main():
 
-    parser = argparse.ArgumentParser(description="Kabutam 日本株検索 PF管理")
+    parser = argparse.ArgumentParser(
+            description="Kabutam 日本株検索 PF管理",
+            formatter_class=lambda prog: argparse.HelpFormatter(
+                prog,
+                max_help_position=35,
+                width=120
+            )
+
+
+    )
     trade = parser.add_mutually_exclusive_group()
+    portfolio_format = parser.add_mutually_exclusive_group()
 
     parser.add_argument(
             "--license",
@@ -142,7 +152,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.7\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
+        version="%(prog)s 0.1.8\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
         )
 
     parser.add_argument(
@@ -154,12 +164,14 @@ def main():
     parser.add_argument(
             "--index",
             choices=INDEX_MAP.keys(),
+            metavar="{core30, 100, 500,...}",
             help="TOPIX区分"
     )
 
     parser.add_argument(
             "--market",
             choices=MARKET_MAP.keys(),
+            metavar="{prime,standard,...}",
             help="市場"
     )
 
@@ -172,6 +184,18 @@ def main():
             "--portfolio",
             action="store_true",
             help="ポートフォリオを表示"
+    )
+    portfolio_format.add_argument(
+            "--min",
+            "--minimal",
+            dest="minimal",
+            action="store_true",
+            help="ポートフォリオを簡易表示する",
+    )
+    portfolio_format.add_argument(
+            "--csv",
+            action="store_true",
+            help="ポートフォリオをCSV形式で出力する",
     )
     trade.add_argument(
             "--buy",
@@ -229,10 +253,15 @@ def main():
     # --------------------------------------------------
     # ポートフォリオ表示
     # --------------------------------------------------
+    if args.portfolio or args.minimal or args.csv:
+        if args.minimal:
+            show_portfolio(conn, mode="minimal")
 
-    if args.portfolio:
+        elif args.csv:
+            show_portfolio_csv(conn)
 
-        show_portfolio(conn)
+        else:
+            show_portfolio(conn, mode="normal")
 
         conn.close()
         return
@@ -263,22 +292,33 @@ def main():
         if args.shares <= 0 or args.price < 0:
             parser.error(f"--sharesは正の整数、--priceは0以上を指定してください")
 
+        account_type = ACCOUNT_MAP[args.account]
         date = args.date or datetime.now().date().isoformat()
+
         try:
-            datetime.strptime(date, "%Y-%m-%d")
+             trade_date = datetime.strptime(date, "%Y-%m-%d").date()
 
         except ValueError:
             parser.error(f"--dateは YYYY-MM-DD形式で指定してください")
 
-        account_type = ACCOUNT_MAP[args.account]
-        register(
-            conn,
-            code,
-            account_type,
-            args.shares,
-            args.price,
-            date
-        )
+        if trade_date > datetime.now().date():
+            parser.error(
+                    "--dateに未来の日付は指定できません"
+            )
+
+        try:
+            register(
+                conn,
+                code,
+                account_type,
+                args.shares,
+                args.price,
+                date
+            )
+        except ValueError as e:
+            conn.close()
+            parser.error(str(e))
+
         print(
             f"{code} を "
             f"{args.shares}株 "
