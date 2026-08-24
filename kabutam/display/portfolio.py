@@ -9,7 +9,7 @@ from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.display.terminal import fit_text
 from kabutam.display.colors import (colorise_profit)
 
-def show_spinner(stop_event, current_ref, total):
+def show_spinner(stop_event, current_ref, total, status_ref):
     symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     i = 0
@@ -17,9 +17,14 @@ def show_spinner(stop_event, current_ref, total):
     while not stop_event.is_set():
 
         current = current_ref[0]
+        status = status_ref[0]
+        if status:
+            prefix = status + " "
+        else:
+            prefix = "株価情報を更新しています... "
 
         print(
-            f"\r株価情報を更新しています... "
+            f"\r{prefix} "
             f"{symbols[i % len(symbols)]} "
             f"{current} / {total}",
             end="",
@@ -29,8 +34,7 @@ def show_spinner(stop_event, current_ref, total):
         i += 1
         time.sleep(0.1)
 
-    # 行を消す
-    print("\r" + " " * 60 + "\r", end="", flush=True)
+    print("\r" + " " * 80 + "\r", end="", flush=True)
 
 def show_portfolio_csv(conn):
 
@@ -162,18 +166,25 @@ def show_portfolio(conn, mode="normal"):
     total_codes = len(codes)
 
     current_ref = [0]
+    status_ref = [None]
+    def on_price_event(message):
+        status_ref[0] = message
+
     stop_event = threading.Event()
 
+    # print(f"保有銘柄 {total_codes}銘柄の株価を確認しています...")
     spinner = threading.Thread(
         target=show_spinner,
-        args=(stop_event, current_ref, total_codes),
+        args=(stop_event, current_ref, total_codes, status_ref,),
     )
 
     spinner.start()
 
     try:
         for code in holdings:
-            prices = ensure_recent_prices(conn, code, 2)
+            # 前のイベント表示をクリア
+            status_ref[0] = None
+            prices = ensure_recent_prices(conn, code, 2, on_event=on_price_event)
 
             if prices:
                 # 最新営業日

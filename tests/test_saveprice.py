@@ -72,7 +72,7 @@ def test_get_latest_price_date():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "2026-08-20",
-        "7203",
+        "72030",
         1000,
         1100,
         990,
@@ -93,7 +93,7 @@ def test_get_latest_price_date():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "2026-08-21",
-        "7203",
+        "72030",
         1050,
         1150,
         1040,
@@ -108,7 +108,7 @@ def test_get_latest_price_date():
 
     conn.commit()
 
-    result = get_latest_price_date(conn, "7203")
+    result = get_latest_price_date(conn, "72030")
 
     assert result == date(2026, 8, 21)
 
@@ -128,7 +128,7 @@ def test_get_latest_price_date_ignores_null_close():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "2026-08-21",
-        "7203",
+        "72030",
         1000,
         1100,
         990,
@@ -149,7 +149,7 @@ def test_get_latest_price_date_ignores_null_close():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "2026-08-24",
-        "7203",
+        "72030",
         1050,
         1150,
         1040,
@@ -164,7 +164,7 @@ def test_get_latest_price_date_ignores_null_close():
 
     conn.commit()
 
-    result = get_latest_price_date(conn, "7203")
+    result = get_latest_price_date(conn, "72030")
 
     assert result == date(2026, 8, 21)
 
@@ -175,13 +175,13 @@ def test_get_latest_price_date_returns_none_when_no_data():
     conn = sqlite3.connect(":memory:")
     create_prices_table(conn)
 
-    result = get_latest_price_date(conn, "7203")
+    result = get_latest_price_date(conn, "72030")
 
     assert result is None
 
     conn.close()
 
-def insert_price(conn, date_str, code="7203", close=1000):
+def insert_price(conn, date_str, code="72030", close=1000):
     conn.execute("""
         INSERT INTO prices (
             Date, Code, Open, High, Low, Close, Volume,
@@ -223,7 +223,7 @@ def test_ensure_recent_prices_does_not_update_when_latest():
 
             result = ensure_recent_prices(
                 conn,
-                "7203",
+                "72030",
                 days=3,
             )
 
@@ -243,7 +243,7 @@ def test_ensure_recent_prices_updates_when_old():
 
     new_record = {
         "Date": "2026-08-24",
-        "Code": "7203",
+        "Code": "72030",
         "Open": 1100,
         "High": 1200,
         "Low": 1080,
@@ -268,7 +268,7 @@ def test_ensure_recent_prices_updates_when_old():
 
             result = ensure_recent_prices(
                 conn,
-                "7203",
+                "72030",
                 days=3,
             )
 
@@ -286,7 +286,7 @@ def test_ensure_recent_prices_updates_when_no_data():
 
     new_record = {
         "Date": "2026-08-24",
-        "Code": "7203",
+        "Code": "72030",
         "Open": 1100,
         "High": 1200,
         "Low": 1080,
@@ -311,7 +311,7 @@ def test_ensure_recent_prices_updates_when_no_data():
 
             result = ensure_recent_prices(
                 conn,
-                "7203",
+                "72030",
                 days=3,
             )
 

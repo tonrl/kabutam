@@ -90,7 +90,7 @@ def get_latest_price_date(conn, code):
     ).date()
 
 
-def update_prices(conn, code, days=3, before_today=False):
+def update_prices(conn, code, days=3, before_today=False, on_event=None):
     """
     yfinanceから株価を取得してDBへ保存する。
     """
@@ -99,9 +99,9 @@ def update_prices(conn, code, days=3, before_today=False):
     records = fetch_prices(
         code,
         days,
-        before_today=before_today
+        before_today=before_today,
+        on_event=on_event
     )
-
 
     if not records:
         return False
@@ -165,7 +165,7 @@ def expected_latest_close_date(now=None):
 
 
 
-def ensure_recent_prices(conn, code, days=3):
+def ensure_recent_prices(conn, code, days=3, on_event=None):
     """
     DBの株価が古ければyfinanceから更新する。
     CloseがNULLの当日データは終値として使用しない
@@ -183,6 +183,7 @@ def ensure_recent_prices(conn, code, days=3):
             code,
             days=FETCH_DAYS,
             before_today=now.time() < PRICE_UPDATE_TIME,
+            on_event=on_event,
         )
     return get_recent_prices(conn, code, days)
 
