@@ -8,6 +8,7 @@ from kabutam.display.showlist import show_list
 from kabutam.db.portfolio import (
     add_buy,
     add_sell,
+    add_split
 )
 from kabutam.db.connection import (
         get_connection,
@@ -23,39 +24,39 @@ from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 # 業種
 # ------------------------------------------------------------
 SECTOR_MAP = [
-    "水産・農林業",
-    "鉱業",
-    "建設業",
-    "食料品",
-    "繊維製品",
-    "パルプ・紙",
-    "化学",
-    "医薬品",
-    "石油・石炭製品",
-    "ゴム製品",
-    "ガラス・土石製品",
-    "鉄鋼",
-    "非鉄金属",
-    "金属製品",
-    "機械",
-    "電気機器",
-    "輸送用機器",
-    "精密機器",
-    "その他製品",
-    "電気・ガス業",
-    "陸運業",
-    "海運業",
-    "空運業",
-    "倉庫・運輸関連業",
-    "情報・通信業",
-    "卸売業",
-    "小売業",
-    "銀行業",
-    "証券、商品先物取引業",
-    "保険業",
-    "その他金融業",
-    "不動産業",
-    "サービス業",
+        "水産・農林業",
+        "鉱業",
+        "建設業",
+        "食料品",
+        "繊維製品",
+        "パルプ・紙",
+        "化学",
+        "医薬品",
+        "石油・石炭製品",
+        "ゴム製品",
+        "ガラス・土石製品",
+        "鉄鋼",
+        "非鉄金属",
+        "金属製品",
+        "機械",
+        "電気機器",
+        "輸送用機器",
+        "精密機器",
+        "その他製品",
+        "電気・ガス業",
+        "陸運業",
+        "海運業",
+        "空運業",
+        "倉庫・運輸関連業",
+        "情報・通信業",
+        "卸売業",
+        "小売業",
+        "銀行業",
+        "証券、商品先物取引業",
+        "保険業",
+        "その他金融業",
+        "不動産業",
+        "サービス業",
 ]
 
 # ------------------------------------------------------------
@@ -219,6 +220,7 @@ def main():
     parser.add_argument(
             "--sector",
             choices=SECTOR_MAP,
+            metavar="{機械...}",
             help="33業種名"
     )
 
@@ -239,6 +241,18 @@ def main():
             action="store_true",
             help="ポートフォリオをCSV形式で出力する",
     )
+
+    trade.add_argument(
+            "--split",
+            type=str,
+            help="株式分割・併合"
+    )
+    parser.add_argument(
+            "--ratio",
+            type=float,
+            help="株式分割・併合倍率（例: 2、0.5）"
+    )
+
     trade.add_argument(
             "--buy",
             type=str,
@@ -270,6 +284,7 @@ def main():
             type=str,
             help="取引日 YYYY-MM-DD"
     )
+
     parser.add_argument(
             "--account",
 
@@ -371,7 +386,85 @@ def main():
         print(f"取引日     : {date}")
         conn.close()
         return
+    # --------------------------------------------------
+    # 株式分割・併合
+    # --------------------------------------------------
 
+    if args.split is not None:
+
+        if args.ratio is None:
+            parser.error(
+                    "--split には --ratio が必要です"
+            )
+
+        if args.ratio <= 0:
+            parser.error(
+                    "--ratioは0より大きい値を指定してください"
+            )
+
+        if args.ratio == 1:
+            parser.error(
+                    "--ratioに1は指定できません"
+            )
+
+        if args.shares is not None or args.price is not None:
+            parser.error(
+                    "--splitでは --shares と --price は指定できません"
+            )
+
+        code = args.split
+
+        if conn.execute(
+            "SELECT 1 FROM equities_master WHERE Code = ?",
+            (code,)
+        ).fetchone() is None:
+            parser.error(
+                f"銘柄コード {code}は銘柄リストに存在しません"
+            )
+
+        date = args.date or datetime.now().date().isoformat()
+
+        try:
+            trade_date = datetime.strptime(
+                date,
+                "%Y-%m-%d"
+            ).date()
+
+        except ValueError:
+            parser.error(
+                "--dateは YYYY-MM-DD形式で指定してください"
+            )
+
+        if trade_date > datetime.now().date():
+            parser.error(
+                "--dateに未来の日付は指定できません"
+            )
+
+        try:
+            add_split(
+                conn,
+                code,
+                args.ratio,
+                date
+            )
+
+        except ValueError as e:
+            conn.close()
+            parser.error(str(e))
+
+        if args.ratio > 1:
+            event = f"{args.ratio:g}倍の株式分割"
+        elif args.ratio < 1:
+            event = f"{1 / args.ratio:g}:1の株式併合"
+        else:
+            event = "株式分割・併合なし"
+
+        print(f"{code} の {event}を登録しました。")
+        print(f"倍率       : {args.ratio:g}")
+        print(f"適用日     : {date}")
+
+        conn.close()
+        return
     # --------------------------------------------------------
     # 銘柄コード
     # --------------------------------------------------------
