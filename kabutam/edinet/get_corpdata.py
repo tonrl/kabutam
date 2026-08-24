@@ -22,7 +22,8 @@ def get_corpdata(conn, edinet_code, message_ref=None):
 
         return fetch_and_save_corpdata(
             conn,
-            edinet_code
+            edinet_code,
+            message_ref
         )
 
     # 最終確認日時
@@ -36,7 +37,8 @@ def get_corpdata(conn, edinet_code, message_ref=None):
     # EDINET DBに新しい決算があるか確認
     return refresh_corpdata_if_needed(
         conn,
-        edinet_code
+        edinet_code,
+        message_ref
     )
 
 
@@ -46,22 +48,23 @@ def fetch_and_save_corpdata(conn, edinet_code, message_ref=None):
 
     result = search_edinet_data(edinet_code) 
     if result is None:
-        print("財務データの取得に失敗しました")
+        print("\n財務データの取得に失敗しました")
         return None
 
     try: 
         return save_corpdata(
                 conn,
                 edinet_code,
-                result
+                result,
+                message_ref
         )
     except (KeyError, TypeError, ValueError) as e: 
-        print(f"エラー: EDINET DBデータの処理に失敗しました: {e}") 
+        print(f"\nエラー: EDINET DBデータの処理に失敗しました: {e}") 
         return None
 
-def refresh_corpdata_if_needed(conn, edinet_code):
-
-    print("EDINET DBの更新状況を確認しています...")
+def refresh_corpdata_if_needed(conn, edinet_code, message_ref=None):
+    if message_ref is not None:
+            message_ref[0] = "EDINET DBの更新状況を確認しています..."
 
     try:
 
@@ -76,14 +79,17 @@ def refresh_corpdata_if_needed(conn, edinet_code):
         if old is None:
             return fetch_and_save_corpdata(
                 conn,
-                edinet_code
+                edinet_code,
+                message_ref
             )
 
         old_disclosure_date = old[0]
+        if message_ref is not None:
+            message_ref[0] = "EDINET DB APIの更新状況を確認しています..."
 
         result = search_edinet_data(edinet_code)
         if result is None:
-            print("EDINET DB APIに接続出来ませんでした")
+            print("\nEDINET DB APIに接続出来ませんでした")
             return conn.execute(
                     "SELECT * FROM edinet_corp_data WHERE EDINETCode = ?", (edinet_code,)
             ).fetchone()
@@ -116,7 +122,7 @@ def refresh_corpdata_if_needed(conn, edinet_code):
 
             conn.commit()
 
-            print("財務データに変更はありません。")
+            print("\n財務データに変更はありません。")
 
             return conn.execute("""
                 SELECT *
@@ -127,7 +133,8 @@ def refresh_corpdata_if_needed(conn, edinet_code):
         # ----------------------------------------
         # 新しい決算情報あり
         # ----------------------------------------
-        print("新しい決算情報を検出しました。")
+        if message_ref is not None:
+            message_ref[0] = "新しい決算情報を検出しました。"
 
         print(
             f"{old_disclosure_date} "
@@ -137,7 +144,8 @@ def refresh_corpdata_if_needed(conn, edinet_code):
         return save_corpdata(
             conn,
             edinet_code,
-            result
+            result,
+            message_ref
         )
 
     except requests.RequestException as e:
@@ -152,7 +160,7 @@ def refresh_corpdata_if_needed(conn, edinet_code):
         """, (edinet_code,)).fetchone()
 
 
-def save_corpdata(conn, edinet_code, result):
+def save_corpdata(conn, edinet_code, result, message_ref=None):
     data = result["data"]
     financials = data.get("latest_financials", {})
     earnings = data.get("latest_earnings", {})
@@ -369,7 +377,9 @@ def save_corpdata(conn, edinet_code, result):
 
     conn.commit()
 
-    print("財務データを保存しました。")
+    if message_ref is not None:
+        message_ref[0] = "財務データを保存しました。"
+
     return conn.execute("""
         SELECT *
         FROM edinet_corp_data

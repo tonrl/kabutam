@@ -1,4 +1,7 @@
+# PYTHON_ARGCOMPLETE_OK
 import argparse
+import argcomplete
+import sys
 from datetime import datetime
 from kabutam.display.showinfo import show_stock
 from kabutam.display.showlist import show_list
@@ -13,9 +16,47 @@ from kabutam.db.connection import (
 from kabutam.display.portfolio import (show_portfolio, show_portfolio_csv)
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
-import sys
 
 # CHECK_INTERVAL = timedelta(days=7)
+
+# ------------------------------------------------------------
+# 業種
+# ------------------------------------------------------------
+SECTOR_MAP = [
+    "水産・農林業",
+    "鉱業",
+    "建設業",
+    "食料品",
+    "繊維製品",
+    "パルプ・紙",
+    "化学",
+    "医薬品",
+    "石油・石炭製品",
+    "ゴム製品",
+    "ガラス・土石製品",
+    "鉄鋼",
+    "非鉄金属",
+    "金属製品",
+    "機械",
+    "電気機器",
+    "輸送用機器",
+    "精密機器",
+    "その他製品",
+    "電気・ガス業",
+    "陸運業",
+    "海運業",
+    "空運業",
+    "倉庫・運輸関連業",
+    "情報・通信業",
+    "卸売業",
+    "小売業",
+    "銀行業",
+    "証券、商品先物取引業",
+    "保険業",
+    "その他金融業",
+    "不動産業",
+    "サービス業",
+]
 
 # ------------------------------------------------------------
 # TOPIX区分
@@ -152,7 +193,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.8\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
+        version="%(prog)s 0.1.9\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
         )
 
     parser.add_argument(
@@ -177,6 +218,7 @@ def main():
 
     parser.add_argument(
             "--sector",
+            choices=SECTOR_MAP,
             help="33業種名"
     )
 
@@ -236,6 +278,7 @@ def main():
             help="口座区分: tokutei / nisa / ippan"
     )
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
     if args.license:
         print(LICENSE_TEXT)

@@ -31,6 +31,7 @@ def show_spinner(stop_event, current_ref, total):
 
     # 行を消す
     print("\r" + " " * 60 + "\r", end="", flush=True)
+
 def show_portfolio_csv(conn):
 
     holdings = get_holdings(conn)
@@ -104,6 +105,7 @@ def show_portfolio_csv(conn):
                 value,
             ])
 
+# Show portfolio in terminal
 def show_portfolio(conn, mode="normal"):
 
     holdings = get_holdings(conn)
@@ -113,6 +115,7 @@ def show_portfolio(conn, mode="normal"):
         return
 
     total_value = 0
+    total_previous_value = 0
     total_cost = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
@@ -122,6 +125,7 @@ def show_portfolio(conn, mode="normal"):
     WIDTH_ACCOUNT = 8
     WIDTH_SHARES = 10
     WIDTH_AVG_PRICE = 14
+    WIDTH_DAILY_PROFIT = 16
     WIDTH_PRICE = 14
     WIDTH_PROFIT = 16
     WIDTH_VALUE = 16
@@ -133,6 +137,7 @@ def show_portfolio(conn, mode="normal"):
             + WIDTH_ACCOUNT
             + WIDTH_SHARES
             + WIDTH_AVG_PRICE
+            + WIDTH_DAILY_PROFIT
             + WIDTH_PRICE
         )
     else:
@@ -142,6 +147,7 @@ def show_portfolio(conn, mode="normal"):
             + WIDTH_ACCOUNT
             + WIDTH_SHARES
             + WIDTH_AVG_PRICE
+            + WIDTH_DAILY_PROFIT
             + WIDTH_PRICE
             + WIDTH_PROFIT
             + WIDTH_VALUE
@@ -150,6 +156,7 @@ def show_portfolio(conn, mode="normal"):
     # 表示前に全銘柄の最新株価を取得
     # --------------------------------------------------
     latest_prices = {}
+    previous_prices = {}
 
     codes = list(holdings.keys())
     total_codes = len(codes)
@@ -166,11 +173,21 @@ def show_portfolio(conn, mode="normal"):
 
     try:
         for code in holdings:
-            prices = ensure_recent_prices(conn,code,1)
+            prices = ensure_recent_prices(conn, code, 2)
+
             if prices:
+                # 最新営業日
                 latest_prices[code] = prices[0][4]
+
+                # 前営業日
+                if len(prices) >=2:
+                    previous_prices[code] = prices[1][4]
+                else:
+                    previous_prices[code] = None
             else:
                 latest_prices[code] = None
+                previous_prices[code] = None
+
             current_ref[0] += 1
     finally:
         stop_event.set()
@@ -189,6 +206,7 @@ def show_portfolio(conn, mode="normal"):
             f"{fit_text('Account', WIDTH_ACCOUNT)}"
             f"{'Shares':>{WIDTH_SHARES}}"
             f"{'Avg Price':>{WIDTH_AVG_PRICE}}"
+            f"{'Daily P/L':>{WIDTH_DAILY_PROFIT}}"
             f"{'Price':>{WIDTH_PRICE}}"
         )
     else:
@@ -198,6 +216,7 @@ def show_portfolio(conn, mode="normal"):
             f"{fit_text('Account', WIDTH_ACCOUNT)}"
             f"{'Shares':>{WIDTH_SHARES}}"
             f"{'Avg Price':>{WIDTH_AVG_PRICE}}"
+            f"{'Daily P/L':>{WIDTH_DAILY_PROFIT}}"
             f"{'Price':>{WIDTH_PRICE}}"
             f"{'P/L':>{WIDTH_PROFIT}}"
             f"{'Value':>{WIDTH_VALUE}}"
@@ -224,6 +243,8 @@ def show_portfolio(conn, mode="normal"):
         # --------------------------------------------------
 
         latest_price = latest_prices.get(code)
+        previous_price = previous_prices.get(code)
+
         # --------------------------------------------------
         # 配当情報(EDINETデータから取得)
         # --------------------------------------------------
@@ -258,10 +279,30 @@ def show_portfolio(conn, mode="normal"):
                 value = shares * latest_price
                 total_value += value
 
+                # 前営業日の保有株評価額
+                if previous_price is not None:
+                    previous_value = shares * previous_price
+                    total_previous_value += previous_value
+
                 profit = (latest_price - average_price) * shares
+                if previous_price is not None:
+                    daily_profit = (latest_price - previous_price) * shares
+                else:
+                    daily_profit = None
+
                 profit_text = f"{profit:+,.0f}"
                 profit_text = f"{profit_text:>16}"
                 profit_text = colorise_profit(profit, profit_text)
+
+                if daily_profit is not None:
+                    daily_profit_text = f"{daily_profit:+,.0f}"
+                    daily_profit_text = f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
+                    daily_profit_text = colorise_profit(
+                            daily_profit,
+                            daily_profit_text
+                    )
+                else:
+                    daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
 
             else:
                 value = None
@@ -286,6 +327,7 @@ def show_portfolio(conn, mode="normal"):
                             f"{fit_text(account_type, WIDTH_ACCOUNT)}"
                             f"{shares:>{WIDTH_SHARES},}"
                             f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
                             f"{latest_price:>{WIDTH_PRICE},.2f}"
                     )
                 else:
@@ -295,6 +337,7 @@ def show_portfolio(conn, mode="normal"):
                             f"{fit_text(account_type, WIDTH_ACCOUNT)}"
                             f"{shares:>{WIDTH_SHARES},}"
                             f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
                             f"{latest_price:>{WIDTH_PRICE},.2f}"
                             f"{profit_text:>{WIDTH_PROFIT}}"
                             f"{value:>{WIDTH_VALUE},.0f}"
@@ -303,14 +346,15 @@ def show_portfolio(conn, mode="normal"):
             else:
 
                 print(
-                    f"{code:<8}"
+                    f"{code:<{WIDTH_CODE}}"
                     f"{company}"
-                    f"{fit_text(account_type, 8)}"
-                    f"{shares:>10,}"
-                    f"{average_price:>14,.2f}"
-                    f"{'-':>14}"
-                    f"{'-':>16}"
-                    f"{'-':>16}"
+                    f"{fit_text(account_type, WIDTH_ACCOUNT)}"
+                    f"{shares:>{WIDTH_SHARES},}"
+                    f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                    f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
+                    f"{'-':>{WIDTH_PRICE}}"
+                    f"{'-':>{WIDTH_PROFIT}}"
+                    f"{'-':>{WIDTH_VALUE}}"
                 )
 
     print("-" * WIDTH)
@@ -320,10 +364,32 @@ def show_portfolio(conn, mode="normal"):
     # --------------------------------------------------
 
     profit = total_value - total_cost
+    daily_profit = total_value - total_previous_value
 
     print(f"取得総額       : {total_cost:,.0f} 円")
     print(f"保有資産額     : {total_value:,.0f} 円")
     # print(f"評価損益       : {profit:+,.0f} 円")
+    print(
+        "前営業日比     : "
+        + colorise_profit(
+            daily_profit,
+            f"{daily_profit:+,.0f} 円"
+        )
+    )
+
+    if total_previous_value > 0:
+        daily_profit_rate = (
+            daily_profit / total_previous_value
+        ) * 100
+
+        print(
+            "前営業日比率   : "
+            + colorise_profit(
+                daily_profit_rate,
+                f"{daily_profit_rate:+.2f}%"
+            )
+        )
+
     print(
             "評価損益       : "+ colorise_profit(
                 profit,
