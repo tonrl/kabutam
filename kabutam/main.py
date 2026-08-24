@@ -220,7 +220,8 @@ def main():
     parser.add_argument(
             "--sector",
             choices=SECTOR_MAP,
-            metavar="{機械...}",
+            # metavar="{機械...}",
+            metavar="SECTOR",
             help="33業種名"
     )
 
