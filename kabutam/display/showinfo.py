@@ -1,116 +1,32 @@
 import sys
 import threading
 import time
-from kabutam.db.schema import create_table_corp_data
-from kabutam.db.connection import require_edi_data
-from kabutam.edinet.get_corpdata import get_corpdata
-from kabutam.stock.saveprice import ensure_recent_prices
+from kabutam.edinet.show_corpdata import get_stock_info
 from kabutam.display.terminal import fit_number
 
 def show_spinner(stop_event, message_ref):
-    symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    # symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    symbols = ["⠉⠉", "⠈⠙", "⠀⠹", "⠀⢸", "⠀⣰", "⢀⣠", "⣀⣀", "⣄⡀", "⣆⠀", "⡇⠀", "⠏⠀", "⠋⠁"]
+    # symbols = ["⠁","⠂","⠄","⡀","⡈","⡐","⡠","⣀","⣁","⣂","⣄","⣌","⣔","⣤","⣥","⣦","⣮","⣶","⣷","⣿","⡿","⠿","⢟","⠟","⡛","⠛","⠫","⢋","⠋","⠍","⡉","⠉","⠑","⠡","⢁"]
 
     i = 0
 
     while not stop_event.is_set():
+        message = message_ref[0] if message_ref[0] else " 銘柄情報を取得しています"
 
         print(
-            f"\r{message_ref[0]} "
-            f"{symbols[i % len(symbols)]}",
-            end="",
-            flush=True
+                f"\r\033[K "
+                f"{symbols[i % len(symbols)]}",
+                f"{message}",
+                end="",
+                flush=True
         )
 
         i += 1
         time.sleep(0.1)
 
-    print("\r" + " " * 80 + "\r", end="", flush=True)
+    print("\r\033[K", end="", flush=True)
 
-# ------------------------------------------------------------
-# 銘柄コード検索
-# ------------------------------------------------------------
-def get_stock_info(conn, code, message_ref=None):
-    company = conn.execute("""
-        SELECT
-            Code,
-            CoName,
-            CoNameEn,
-            S17Nm,
-            S33Nm,
-            ScaleCat,
-            MktNm
-        FROM equities_master
-        WHERE Code = ?
-    """, (code,)).fetchone()
-
-    if company is None:
-        return None
-
-    edinetdata = conn.execute("""
-        SELECT 
-            EDINETCode,
-            ListingStatus 
-        FROM edinet_master 
-        WHERE Code = ? 
-    """, (code,)).fetchone()
-
-    if message_ref:
-        message_ref[0] = "株価情報を取得しています..."
-
-    prices = ensure_recent_prices(conn, code, 3)
-    if prices:
-        latest_price = prices[0][4]   # Date, Open, High, Low, Close, Volume...
-    else:
-        latest_price = None
-    
-    # 基本情報
-    (
-        code,
-        name,
-        name_en,
-        sector17,
-        sector33,
-        scale,
-        market
-    ) = company
-
-    if edinetdata is not None:
-        edinetcode, listing_status = edinetdata 
-    else: 
-        edinetcode = None 
-        listing_status = None
-
-    # EDINET 情報
-    if message_ref:
-        message_ref[0] = "財務情報を確認しています..."
-
-    corpdata = None
-    if edinetcode is not None:
-        if not require_edi_data(conn):
-            create_table_corp_data(conn)
-
-        corpdata = get_corpdata(conn, edinetcode, message_ref)
-    
-    return {
-        "company": {
-            "code": code,
-            "name": name,
-            "name_en": name_en,
-            "sector17": sector17,
-            "sector33": sector33,
-            "scale": scale,
-            "market": market,
-        },
-
-        "edinet": {
-            "code": edinetcode,
-            "listing_status": listing_status,
-        },
-
-        "prices": prices,
-        "latest_price": latest_price,
-        "corpdata": corpdata,
-    }
 
 def calc_stock_info(stock_info):
     corpdata = stock_info["corpdata"]
@@ -539,7 +455,8 @@ def display_stock_info(stock_info):
 def show_stock(conn, code):
 
     stop_event = threading.Event()
-    message_ref = ["銘柄情報を取得しています..."]
+    # message_ref = ["銘柄情報を取得しています"]
+    message_ref = ["銘柄情報を取得しています"]
 
     spinner = threading.Thread(
         target=show_spinner,

@@ -1,18 +1,15 @@
-import functools
-from pathlib import Path
 import tomllib
-
+import functools
 from platformdirs import user_config_dir
-
-from kabutam.secrets.base import SecretBackend
-from kabutam.secrets.pass_backend import PassBackend
+from pathlib import Path
 from kabutam.secrets.secretservice import SecretServiceBackend
-
+from kabutam.secrets.pass_backend import PassBackend
+from kabutam.secrets.base import SecretBackend
 
 APP_NAME = "kabutam"
 
 DEFAULT_PASS_PATHS = {
-    "EDNET_DB_API_KEY": "ednetdb/api/EDNET_DB_API_KEY",
+    "EDINET_DB_API_KEY": "ednetdb/api/EDINET_DB_API_KEY",
     "JPX_JQUANTS_API_KEY": "jpx-jquants.com/api/JPX_JQUANTS_API_KEY",
 }
 
@@ -77,7 +74,7 @@ def get_secret(name: str) -> str:
 
 @functools.lru_cache(maxsize=1)
 def get_edinet_api_key() -> str:
-    return get_secret("EDNET_DB_API_KEY")
+    return get_secret("EDINET_DB_API_KEY")
 
 
 @functools.lru_cache(maxsize=1)

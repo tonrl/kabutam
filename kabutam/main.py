@@ -1,22 +1,15 @@
 # PYTHON_ARGCOMPLETE_OK
+import sys
 import argparse
 import argcomplete
-import sys
-from datetime import datetime
-from kabutam.display.showinfo import show_stock
-from kabutam.display.showlist import show_list
-from kabutam.db.portfolio import (
-    add_buy,
-    add_sell,
-    add_split
-)
-from kabutam.db.connection import (
-        get_connection,
-        require_master_data
-)
-from kabutam.display.portfolio import (show_portfolio, show_portfolio_csv)
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
+from kabutam.display.showlist import show_list
+from kabutam.display.showinfo import show_stock
+from kabutam.display.portfolio import (show_portfolio, show_portfolio_csv)
+from kabutam.db.portfolio import (add_buy, add_sell, add_split)
+from kabutam.db.connection import (get_connection, require_master_data)
+from datetime import datetime
 
 # CHECK_INTERVAL = timedelta(days=7)
 
@@ -194,7 +187,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.9\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
+        version="%(prog)s 0.2.0\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
         )
 
     parser.add_argument(
@@ -212,6 +205,7 @@ def main():
 
     parser.add_argument(
             "--market",
+            "--mk",
             choices=MARKET_MAP.keys(),
             metavar="{prime,standard,...}",
             help="市場"
@@ -219,6 +213,7 @@ def main():
 
     parser.add_argument(
             "--sector",
+            "--sec",
             choices=SECTOR_MAP,
             # metavar="{機械...}",
             metavar="SECTOR",
@@ -227,9 +222,17 @@ def main():
 
     parser.add_argument(
             "--portfolio",
+            "--pf",
             action="store_true",
             help="ポートフォリオを表示"
     )
+    parser.add_argument(
+            "--sort",
+            choices=["shares","code"],
+            default = "shares",
+            help="ポートフォリオの表示順: code=銘柄コード順 / shares=株数の多い順",
+    )
+
     portfolio_format.add_argument(
             "--min",
             "--minimal",
@@ -314,13 +317,13 @@ def main():
     # --------------------------------------------------
     if args.portfolio or args.minimal or args.csv:
         if args.minimal:
-            show_portfolio(conn, mode="minimal")
+            show_portfolio(conn, mode="minimal", sort_by=args.sort)
 
         elif args.csv:
             show_portfolio_csv(conn)
 
         else:
-            show_portfolio(conn, mode="normal")
+            show_portfolio(conn, mode="normal", sort_by=args.sort)
 
         conn.close()
         return
@@ -550,10 +553,11 @@ def main():
         title = " / ".join(title_parts)
 
         show_list(
-            title,
-            conditions,
-            hide_market=hide_market,
-            hide_scale=hide_scale
+                conn,
+                title,
+                conditions,
+                hide_market=hide_market,
+                hide_scale=hide_scale
         )
         conn.close()
         return

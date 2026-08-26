@@ -10,7 +10,9 @@ from kabutam.display.terminal import fit_text
 from kabutam.display.colors import (colorise_profit)
 
 def show_spinner(stop_event, current_ref, total, status_ref):
-    symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    # symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    symbols = ["⠉⠉", "⠈⠙", "⠀⠹", "⠀⢸", "⠀⣰", "⢀⣠", "⣀⣀", "⣄⡀", "⣆⠀", "⡇⠀", "⠏⠀", "⠋⠁"]
+    # symbols = ["⠁","⠂","⠄","⡀","⡈","⡐","⡠","⣀","⣁","⣂","⣄","⣌","⣔","⣤","⣥","⣦","⣮","⣶","⣷","⣿","⡿","⠿","⢟","⠟","⡛","⠛","⠫","⢋","⠋","⠍","⡉","⠉","⠑","⠡","⢁"]
 
     i = 0
 
@@ -19,22 +21,23 @@ def show_spinner(stop_event, current_ref, total, status_ref):
         current = current_ref[0]
         status = status_ref[0]
         if status:
-            prefix = status + " "
+            message = status
         else:
-            prefix = "株価情報を更新しています... "
+            message = " 株価情報を更新しています"
 
         print(
-            f"\r{prefix} "
-            f"{symbols[i % len(symbols)]} "
-            f"{current} / {total}",
-            end="",
-            flush=True
+                f"\r\033[K "
+                f"{symbols[i % len(symbols)]} "
+                f"({current} / {total})",
+                f"{message} ",
+                end="",
+                flush=True
         )
 
         i += 1
         time.sleep(0.1)
-
-    print("\r" + " " * 80 + "\r", end="", flush=True)
+    print("\r\033[K", end="", flush=True)
+    # print("\r" + " " * 80 + "\r", end="", flush=True)
 
 def show_portfolio_csv(conn):
 
@@ -62,7 +65,7 @@ def show_portfolio_csv(conn):
     latest_prices = {}
 
     for code in holdings:
-        prices = ensure_recent_prices(conn, code, 1)
+        prices = ensure_recent_prices(conn, code, 1, on_event=on_event)
 
         if prices:
             latest_prices[code] = prices[0][4]
@@ -110,7 +113,7 @@ def show_portfolio_csv(conn):
             ])
 
 # Show portfolio in terminal
-def show_portfolio(conn, mode="normal"):
+def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     holdings = get_holdings(conn)
 
@@ -123,6 +126,8 @@ def show_portfolio(conn, mode="normal"):
     total_cost = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
+
+    # カラムの幅の定義
     # WIDTH = 95
     WIDTH_CODE = 8
     WIDTH_COMPANY = 25
@@ -184,6 +189,8 @@ def show_portfolio(conn, mode="normal"):
         for code in holdings:
             # 前のイベント表示をクリア
             status_ref[0] = None
+
+            # 株価の取得
             prices = ensure_recent_prices(conn, code, 2, on_event=on_price_event)
 
             if prices:
@@ -203,6 +210,64 @@ def show_portfolio(conn, mode="normal"):
     finally:
         stop_event.set()
         spinner.join()
+
+    # --------------------------------------------------
+    # 表示前に全銘柄の配当情報（EDINETデータ）を取得
+    # --------------------------------------------------
+    # print(f"保有銘柄 {total_codes}銘柄の企業情報を確認しています...")
+    forecast_dividends = {}
+    current_ref[0] = 0
+    status_ref[0] = " 企業情報を更新しています"
+
+    stop_event = threading.Event()
+    spinner = threading.Thread(
+        target=show_spinner,
+        args=(stop_event, current_ref, total_codes, status_ref,),
+    )
+
+    spinner.start()
+    try:
+        create_table_corp_data(conn)
+        for code in codes:
+            edinet_row = conn.execute("""
+                SELECT EDINETCode
+                FROM edinet_master
+                WHERE Code = ?
+            """, (code,)).fetchone()
+
+            forecast_dividend = None
+            if edinet_row and edinet_row[0]:
+                edinetcode = edinet_row[0]
+                create_table_corp_data(conn)
+                corpdata = get_corpdata(conn, edinetcode, message_ref=status_ref)
+                if corpdata and len(corpdata) > 13:
+                    # index 13: forecast_dividend_per_share (予想年間配当)
+                    forecast_dividend = corpdata[13]
+
+            forecast_dividends[code] = forecast_dividend
+            current_ref[0] += 1
+
+    finally:
+        stop_event.set()
+        spinner.join()
+
+    # ソート処理
+    if sort_by == "shares":
+        codes = sorted(
+            holdings.keys(),
+            key=lambda code: (
+                -sum(
+                    holding["shares"]
+                    for holding in holdings[code].values()
+                ),
+                str(code),
+            )
+        )
+    else:
+        codes = sorted(
+            holdings.keys(),
+            key=lambda code: str(code)
+        )
 
     #-----------------------------------------------------
 
@@ -235,7 +300,9 @@ def show_portfolio(conn, mode="normal"):
 
     print("-" * WIDTH)
 
-    for code, accounts in holdings.items():
+    # for code, accounts in holdings.items():
+    for code in codes:
+        accounts = holdings[code]
 
         # --------------------------------------------------
         # 会社名
@@ -255,24 +322,7 @@ def show_portfolio(conn, mode="normal"):
 
         latest_price = latest_prices.get(code)
         previous_price = previous_prices.get(code)
-
-        # --------------------------------------------------
-        # 配当情報(EDINETデータから取得)
-        # --------------------------------------------------
-        edinet_row = conn.execute("""
-            SELECT EDINETCode
-            FROM edinet_master
-            WHERE Code = ?
-        """, (code,)).fetchone()
-
-        forecast_dividend = None
-        if edinet_row and edinet_row[0]:
-            edinetcode = edinet_row[0]
-            create_table_corp_data(conn)
-            corpdata = get_corpdata(conn, edinetcode)
-            if corpdata and len(corpdata) > 13:
-                # index 13: forecast_dividend_per_share (予想年間配当)
-                forecast_dividend = corpdata[13]
+        forecast_dividend = forecast_dividends.get(code)
 
         # --------------------------------------------------
         # 口座ごとに表示
@@ -318,6 +368,7 @@ def show_portfolio(conn, mode="normal"):
             else:
                 value = None
                 profit = None
+                daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
 
             # 配当金・税金計算
             if forecast_dividend is not None:

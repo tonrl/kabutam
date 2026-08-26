@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kabutam"
-version = "0.1.9"
+version = "0.2.0"
 description = "A terminal-based stock and portfolio tracking tool"
 readme = "README.md"
 requires-python = ">=3.11"

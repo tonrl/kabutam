@@ -1,7 +1,3 @@
-from kabutam.db.connection import (
-        get_connection,
-        require_master_data
-)
 from kabutam.display.terminal import fit_text
 
 # ------------------------------------------------------------
@@ -9,15 +5,12 @@ from kabutam.display.terminal import fit_text
 # ------------------------------------------------------------
 
 def show_list(
-    title,
-    conditions,
-    hide_market=False,
-    hide_scale=False
+        conn,
+        title,
+        conditions,
+        hide_market=False,
+        hide_scale=False
 ):
-    conn = get_connection()
-    require_master_data(conn)
-
-
     where = []
     params = []
 
@@ -46,8 +39,6 @@ def show_list(
         query,
         params
     ).fetchall()
-
-    conn.close()
 
     if not companies:
         print(f"{title} に該当する銘柄がありません。")

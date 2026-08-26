@@ -1,32 +1,5 @@
 # db/portfolio.py
-
-def create_table_portfolio(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Code TEXT NOT NULL,
-            account_type TEXT NOT NULL,
-            transaction_type TEXT NOT NULL,
-            shares INTEGER NOT NULL,
-            price REAL NOT NULL,
-            transaction_date TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS corporate_actions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Code TEXT NOT NULL,
-            action_type TEXT NOT NULL,
-            ratio REAL NOT NULL,
-            effective_date TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-
-    conn.commit()
+from kabutam.db.schema import create_table_portfolio
 
 def get_holding_shares(conn, code, account_type):
     create_table_portfolio(conn)
@@ -225,32 +198,16 @@ def add_split(conn, code, ratio, date):
     # 現在の保有株数に対して端数が発生するか確認
     # --------------------------------------------------------
 
-    transactions = conn.execute("""
-        SELECT
-            account_type,
-            transaction_type,
-            shares
+    account_type = conn.execute("""
+        SELECT DISTINCT account_type
         FROM portfolio_transactions
         WHERE Code = ?
-        ORDER BY transaction_date, id
     """, (code,)).fetchall()
 
-    holdings = {}
-
-    for account_type, transaction_type, shares in transactions:
-        if account_type not in holdings:
-            holdings[account_type] = 0
-
-        if transaction_type == "BUY":
-            holdings[account_type] += shares
-
-        elif transaction_type == "SELL":
-            holdings[account_type] -= shares
-
-    for account_type, shares in holdings.items():
+    for (account_type,) in account_type:
+        shares = get_holding_shares(conn, code, account_type)
         if shares <= 0:
             continue
-
         new_shares = shares * ratio
 
         if new_shares != int(new_shares):
@@ -258,7 +215,6 @@ def add_split(conn, code, ratio, date):
                 f"{code} の株式分割・併合では端数株が発生します。"
                 f" {shares}株 × {ratio} = {new_shares}株"
             )
-
 
 
     conn.execute("""

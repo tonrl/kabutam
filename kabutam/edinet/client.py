@@ -7,14 +7,14 @@ BASE_URL = "https://edinetdb.jp/v1/companies"
 def search_edinet_data(edinet_code):
 
     # API key 確認
-    EDNET_DB_API_KEY = get_edinet_api_key()
+    EDINET_DB_API_KEY = get_edinet_api_key()
 
-    if not EDNET_DB_API_KEY:
+    if not EDINET_DB_API_KEY:
         print("Error: EDINET DB API key is empty")
         return None
 
     HEADERS = {
-            "X-API-Key": EDNET_DB_API_KEY
+            "X-API-Key": EDINET_DB_API_KEY
     }
 
     url = f"{BASE_URL}/{edinet_code}"
