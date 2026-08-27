@@ -1,5 +1,5 @@
-import time
-from datetime import datetime, timedelta
+import time as time_tool
+from datetime import datetime, timedelta, time
 
 from kabutam.tdnet.client import search_tdnet_doc_list_data
 from kabutam.db.schema import create_table_tdnet_disclosure
@@ -9,14 +9,19 @@ TDNET_DAYS_TO_CHECK = 15
 TDNET_RECENT_DAYS = 2
 TDNET_SYNC_INTERVAL_HOURS = 3
 TDNET_SYNC_STATUS_RETENTION_DAYS = 30
+DATA_UPDATE_TIME_MIN = time(9, 00)
+REQUEST_INTERVAL = 1.0
 
 def get_recent_trading_days(n=TDNET_DAYS_TO_CHECK, base_date=None):
     """
     今日から遡って、土日祝日（非営業日）をスキップし、
     指定した営業日数分の 'YYYY-MM-DD' 文字列のリストを返す。
     """
+    now = datetime.now()
     if base_date is None:
         base_date = datetime.now().date()
+        if now.time() < DATA_UPDATE_TIME_MIN:
+            base_date -= timedelta(days=1)
 
     current = base_date
     trading_days = []
@@ -70,7 +75,9 @@ def sync_recent_tdnet(conn, message_ref=None):
 
         total_inserted += saved_count
 
-        time.sleep(1)
+        if index < len(target_dates) - 1:
+            time_tool.sleep(REQUEST_INTERVAL)
+
 
     # 古い同期情報削除
     cleanup_tdnet_sync_status(
@@ -136,8 +143,6 @@ def update_tdnet_sync_status(conn, date_str, document_count, completed=False):
 
 def sync_tdnet_doc_list(conn, date_str=None, message_ref=None, completed=False):
     # 指定日のTDnet開示情報を取得してDBに保存する。
-
-    create_table_tdnet_disclosure(conn)
 
     if date_str is None:
         date_str = datetime.now().strftime("%Y-%m-%d")

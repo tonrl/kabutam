@@ -1,43 +1,14 @@
+# import time as time_tool
 import jpholiday
 from datetime import datetime, timedelta, time
 from kabutam.stock.yfinancetool import fetch_prices
+from kabutam.db.schema import create_prices_table
 from zoneinfo import ZoneInfo
 
 JST = ZoneInfo("Asia/Tokyo")
 
 PRICE_UPDATE_TIME = time(16, 30)
 FETCH_DAYS = 14
-
-def create_prices_table(conn):
-    """pricesテーブルが存在しない場合に作成する"""
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS prices (
-            Date TEXT,
-            Code TEXT,
-            Open REAL,
-            High REAL,
-            Low REAL,
-            Close REAL,
-            Volume REAL,
-            AdjOpen REAL,
-            AdjHigh REAL,
-            AdjLow REAL,
-            AdjClose REAL,
-            AdjVolume REAL,
-            PRIMARY KEY (Date, Code)
-        )
-    """)
-    conn.commit()
-
-def ensure_prices_table_exists(conn):
-    """pricesテーブルが存在しない場合のみ作成する"""
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT 1 FROM sqlite_master WHERE type='table' AND name='prices'
-    """)
-    if not cursor.fetchone():
-        print("pricesテーブルを作成します")
-        create_prices_table(conn)
 
 def get_recent_prices(conn, code, days=3):
     """
@@ -71,7 +42,7 @@ def get_latest_price_date(conn, code):
     最新の確定終値の日付を取得する。
 
     """
-    ensure_prices_table_exists(conn)
+    create_prices_table(conn)
 
     row = conn.execute("""
         SELECT MAX(Date)
@@ -177,6 +148,7 @@ def ensure_recent_prices(conn, code, days=3, on_event=None):
     target = expected_latest_close_date(now)
     latest_date = get_latest_price_date(conn, code)
 
+    # time_tool.sleep(1)
     if latest_date is None or latest_date < target:
         update_prices(
             conn,

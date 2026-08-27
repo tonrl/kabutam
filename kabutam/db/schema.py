@@ -49,6 +49,27 @@ def create_table_corp_data(conn):
     """)
     conn.commit()
 
+def create_prices_table(conn):
+    """pricesテーブルが存在しない場合に作成する"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS prices (
+            Date TEXT,
+            Code TEXT,
+            Open REAL,
+            High REAL,
+            Low REAL,
+            Close REAL,
+            Volume REAL,
+            AdjOpen REAL,
+            AdjHigh REAL,
+            AdjLow REAL,
+            AdjClose REAL,
+            AdjVolume REAL,
+            PRIMARY KEY (Date, Code)
+        )
+    """)
+    conn.commit()
+
 def create_table_portfolio(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS portfolio_transactions (

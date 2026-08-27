@@ -197,6 +197,14 @@ def main():
     )
 
     parser.add_argument(
+            "--full",
+            dest="full",
+            action="store_true",
+            help="詳細情報表示"
+    )
+
+
+    parser.add_argument(
             "--index",
             choices=INDEX_MAP.keys(),
             metavar="{core30, 100, 500,...}",
@@ -240,6 +248,26 @@ def main():
             action="store_true",
             help="ポートフォリオを簡易表示する",
     )
+    portfolio_format.add_argument(
+            "--doc",
+            "--documents",
+            dest="documents",
+            action="store_true",
+            help="保有銘柄の開示情報のみ表示する",
+    )
+
+    parser.add_argument(
+            "--td",
+            action="store_true",
+            help="TDnetのみ"
+    )
+
+    parser.add_argument(
+            "--ed",
+            action="store_true",
+            help="TDnetのみ"
+    )
+
     portfolio_format.add_argument(
             "--csv",
             action="store_true",
@@ -318,6 +346,13 @@ def main():
     if args.portfolio or args.minimal or args.csv:
         if args.minimal:
             show_portfolio(conn, mode="minimal", sort_by=args.sort)
+        elif args.documents:
+            if args.td:
+                show_portfolio(conn, mode="tdnet", sort_by=args.sort)
+            elif args.ed:
+                show_portfolio(conn, mode="edinet", sort_by=args.sort)
+            else:
+                show_portfolio(conn, mode="documents", sort_by=args.sort)
 
         elif args.csv:
             show_portfolio_csv(conn)
@@ -474,10 +509,14 @@ def main():
     # --------------------------------------------------------
 
     if args.code:
-        show_stock(conn, args.code)
+        if args.full:
+            mode = "normal"
+        else:
+            mode = "short"
+
+        show_stock(conn, args.code, mode)
         conn.close()
         return
-
 
     # --------------------------------------------------------
     # 検索条件
@@ -568,7 +607,7 @@ def main():
     # → 日本取引所グループ
     # --------------------------------------------------------
 
-    show_stock(conn, "86970")
+    show_stock(conn, "86970", mode="normal")
     conn.close()
 
 

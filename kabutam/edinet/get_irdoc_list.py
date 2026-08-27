@@ -1,5 +1,5 @@
-import time
-from datetime import datetime, timedelta
+import time as time_tool
+from datetime import datetime, timedelta, time
 from kabutam.edinet.client import search_edinet_doc_list_data
 from kabutam.db.schema import create_table_edinet_doc_list
 from kabutam.stock.saveprice import is_trading_day
@@ -7,6 +7,8 @@ EDINET_DAYS_TO_CHECK = 15
 EDINET_DOCUMENT_RETENTION_DAYS = 365 * 3
 EDINET_SYNC_STATUS_RETENTION_DAYS = 50
 EDINET_RECENT_CHECK_INTERVAL_HOURS = 3
+DATA_UPDATE_TIME_MIN = time(9, 00)
+REQUEST_INTERVAL = 1.0
 
 
 from datetime import datetime, timedelta
@@ -16,10 +18,12 @@ def get_recent_trading_days(n=EDINET_DAYS_TO_CHECK, base_date=None):
     今日から遡って、土日祝日（非営業日）をスキップし、
     指定した営業日数分の 'YYYY-MM-DD' 文字列のリストを返す。
     """
+    now = datetime.now()
     if base_date is None:
         base_date = datetime.now().date()
+        if now.time() < DATA_UPDATE_TIME_MIN:
+             base_date -= timedelta(days=1)
 
-    # current = base_date - timedelta(days=1)
     current = base_date
     trading_days = []
 
@@ -30,16 +34,24 @@ def get_recent_trading_days(n=EDINET_DAYS_TO_CHECK, base_date=None):
 
     return trading_days
 
-def should_check_recent_edinet(conn, target_date, interval_hours=3):
+def should_sync_edinet_data(conn, target_date, interval_hours=3):
 
     row = conn.execute("""
-        SELECT last_checked_at
+        SELECT last_checked_at, completed
         FROM edinet_sync_status
         WHERE target_date = ?
     """, (target_date,)).fetchone()
 
     # 一度もチェックしていない
-    if row is None or row[0] is None:
+    if row is None:
+        return True
+
+    last_checked_at, completed = row
+
+    if completed:
+        return False
+
+    if last_checked_at is None:
         return True
 
     try:
@@ -65,21 +77,12 @@ def sync_recent_edinet_doc_list(conn, days_to_check=EDINET_DAYS_TO_CHECK, messag
 
     for index, date_str in enumerate(target_dates):
 
+        #----------------------------------------
+
         is_recent = index < 2
 
-        if not should_check_recent_edinet(conn, date_str, EDINET_RECENT_CHECK_INTERVAL_HOURS):
+        if not should_sync_edinet_data(conn, date_str, EDINET_RECENT_CHECK_INTERVAL_HOURS):
             continue
-
-        # if not is_recent:
-        else:
-            sync_row = conn.execute("""
-                SELECT completed
-                FROM edinet_sync_status
-                WHERE target_date = ?
-            """, (date_str,)).fetchone()
-
-            if sync_row is not None and sync_row[0] == 1:
-                continue
 
         if message_ref is not None:
             message_ref[0] = f" [{date_str}] の書類リストを取得しています..."
@@ -89,7 +92,7 @@ def sync_recent_edinet_doc_list(conn, days_to_check=EDINET_DAYS_TO_CHECK, messag
         if response_json is None:
                 if message_ref is not None:
                     message_ref[0] = f" [{date_str}] 取得に失敗しました。スキップします。"
-                time.sleep(1.5)
+                time_tool.sleep(1.5)
                 continue
 
         documents = response_json.get("results", [])
@@ -119,9 +122,9 @@ def sync_recent_edinet_doc_list(conn, days_to_check=EDINET_DAYS_TO_CHECK, messag
                 document_count=len(documents),
                 completed=not is_recent
         )
+    if index < len(target_dates) - 1:
+        time_tool.sleep(REQUEST_INTERVAL)
 
-
-        time.sleep(1.0)
 
     cleanup_edinet_sync_status(conn, keep_days=EDINET_SYNC_STATUS_RETENTION_DAYS)
     if message_ref is not None:

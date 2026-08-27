@@ -1,43 +1,21 @@
-import sys
-import threading
 import time
+import threading
+import sys
+from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 from kabutam.edinet.show_corpdata import get_stock_info
 from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
-from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 from kabutam.display.terminal import fit_number
+from kabutam.animations.spinners import show_spinner
 
-SET_LIMIT = 4
+DATA_GET_LIMIT = 6
 
 # スタイルの定義
 RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-FG_BRIGHT_WHITE = "\033[97m"
-FG_CYAN = "\033[36m"
 FG_GRAY = "\033[90m"
-
-def show_spinner(stop_event, message_ref):
-    # symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    symbols = ["⠉⠉", "⠈⠙", "⠀⠹", "⠀⢸", "⠀⣰", "⢀⣠", "⣀⣀", "⣄⡀", "⣆⠀", "⡇⠀", "⠏⠀", "⠋⠁"]
-    # symbols = ["⠁","⠂","⠄","⡀","⡈","⡐","⡠","⣀","⣁","⣂","⣄","⣌","⣔","⣤","⣥","⣦","⣮","⣶","⣷","⣿","⡿","⠿","⢟","⠟","⡛","⠛","⠫","⢋","⠋","⠍","⡉","⠉","⠑","⠡","⢁"]
-
-    i = 0
-
-    while not stop_event.is_set():
-        message = message_ref[0] if message_ref[0] else " 銘柄情報を取得しています"
-
-        print(
-                f"\r\033[K "
-                f"{symbols[i % len(symbols)]}",
-                f"{message}",
-                end="",
-                flush=True
-        )
-
-        i += 1
-        time.sleep(0.1)
-
-    print("\r\033[K", end="", flush=True)
+FG_CYAN = "\033[36m"
+FG_BRIGHT_WHITE = "\033[97m"
+DIM = "\033[2m"
+BOLD = "\033[1m"
 
 def get_recent_corp_documents(conn, edinet_code, limit):
     """
@@ -210,7 +188,7 @@ def calc_stock_info(stock_info):
 # ------------------------------------------------------------
 # Display Info
 # ------------------------------------------------------------
-def display_stock_info(stock_info):
+def display_stock_info(stock_info, mode="normal"):
     company = stock_info["company"]
     prices = stock_info["prices"]
     calculated = stock_info["calculated"]
@@ -259,6 +237,239 @@ def display_stock_info(stock_info):
                 f"{fit_number(close, 10)}"
                 f"{fit_number(volume, 15, 0)}"
         )
+    if (mode=="normal"):
+
+        c = calculated
+
+        print("EDINET財務情報")
+        print(f"決算開示日     : {c['disclosure_date']}")
+        print(f"会計年度       : {c['fiscal_year']}")
+        print(f"四半期         : {c['quarter']}")
+
+        print()
+        print("バリュエーション")
+        print("-" * 60)
+
+        print(
+            f"PER            : {c['current_per']:.2f}倍"
+            if c["current_per"] is not None
+            else "PER            : -"
+        )
+
+        print(
+            f"PBR            : {c['current_pbr']:.2f}倍"
+            if c["current_pbr"] is not None
+            else "PBR            : -"
+        )
+
+        print(
+            f"EPS            : {c['eps']:.2f}円"
+            if c["eps"] is not None
+            else "EPS            : -"
+        )
+
+        print(
+            f"BPS            : {c['bps']:.2f}円"
+            if c["bps"] is not None
+            else "BPS            : -"
+        )
+
+        print(
+            f"ROE            : {c['roe'] * 100:.2f}%"
+            if c["roe"] is not None
+            else "ROE            : -"
+        )
+
+        print()
+        print("配当")
+        print("-" * 60)
+
+        print(
+            f"配当利回り     : {c['current_dividend_yield'] * 100:.2f}%"
+            if c["current_dividend_yield"] is not None
+            else "配当利回り     : -"
+        )
+
+        print(
+            f"年間配当実績   : "
+            f"{c['dividend_per_share']:.2f} 円"
+            if c["dividend_per_share"] is not None
+            else "年間配当実績   : -"
+        )
+
+        print(
+            f"中間配当       : "
+            f"{c['interim_dividend_per_share']:.2f} 円"
+            if c["interim_dividend_per_share"] is not None
+            else "中間配当       : -"
+        )
+
+        print(
+            f"期末配当       : "
+            f"{c['yearend_dividend_per_share']:.2f} 円"
+            if c["yearend_dividend_per_share"] is not None
+            else "期末配当       : -"
+        )
+
+        print(
+            f"予想年間配当   : "
+            f"{c['forecast_dividend_per_share']:.2f} 円"
+            if c["forecast_dividend_per_share"] is not None
+            else "予想年間配当   : -"
+        )
+
+        # 前年度実績
+        print()
+        print("通期実績")
+        print("-" * 60)
+
+        print(
+            f"売上高         : {c['revenue'] / 1e6:,.0f} 百万円"
+            if c["revenue"] is not None
+            else "売上高         : -"
+        )
+
+        print(
+            f"営業利益       : {c['operating_income'] / 1e6:,.0f} 百万円"
+            if c["operating_income"] is not None
+            else "営業利益       : -"
+        )
+
+        print(
+            f"経常利益       : {c['ordinary_income'] / 1e6:,.0f} 百万円"
+            if c["ordinary_income"] is not None
+            else "経常利益       : -"
+        )
+
+        print(
+            f"純利益         : {c['net_income'] / 1e6:,.0f} 百万円"
+            if c["net_income"] is not None
+            else "純利益         : -"
+        )
+
+        # ============================================================
+        # 最新決算予想
+        # ============================================================
+
+        print()
+        print("通期会社予想")
+        print("-" * 70)
+
+        print(
+            f"売上高予想     : "
+            f"{c['forecast_revenue']:,.0f} 百万円"
+            if c["forecast_revenue"] is not None
+            else "売上高予想     : -"
+        )
+
+        print(
+            f"営業利益予想   : "
+            f"{c['forecast_operating_income']:,.0f} 百万円"
+            if c["forecast_operating_income"] is not None
+            else "営業利益予想   : -"
+        )
+
+        print(
+            f"純利益予想     : "
+            f"{c['forecast_net_income']:,.0f} 百万円"
+            if c["forecast_net_income"] is not None
+            else "純利益予想     : -"
+        )
+
+        print(
+            f"EPS予想        : "
+            f"{c['forecast_eps']:.2f} 円"
+            if c["forecast_eps"] is not None
+            else "EPS予想        : -"
+        )
+
+        print()
+        print("財務")
+        print("-" * 60)
+
+        print(
+            f"自己資本比率   : {c['equity_ratio'] * 100:.2f}%"
+            if c["equity_ratio"] is not None
+            else "自己資本比率   : -"
+        )
+
+        print(
+            f"現金           : {c['cash'] / 1e6:,.0f} 百万円"
+            if c["cash"] is not None
+            else "現金           : -"
+        )
+
+        print(
+            f"総資産         : {c['total_assets'] / 1e6:,.0f} 百万円"
+            if c["total_assets"] is not None
+            else "総資産         : -"
+        )
+
+        print(
+            f"総負債         : {c['total_liabilities'] / 1e6:,.0f} 百万円"
+            if c["total_liabilities"] is not None
+            else "総負債         : -"
+        )
+
+        print(
+            f"株主資本       : {c['shareholders_equity'] / 1e6:,.0f} 百万円"
+            if c["shareholders_equity"] is not None
+            else "株主資本       : -"
+        )
+
+        print(
+            f"純資産         : {c['net_assets'] / 1e6:,.0f} 百万円"
+            if c["net_assets"] is not None
+            else "純資産         : -"
+        )
+
+        print(
+            f"有利子負債     : {c['interest_bearing_debt'] / 1e6:,.0f} 百万円"
+            if c["interest_bearing_debt"] is not None
+            else "有利子負債     : -"
+        )
+
+        print()
+        print("キャッシュ・フロー")
+        print("-" * 60)
+
+        print(
+            f"営業CF         : {c['operating_cf'] / 1e6:,.0f} 百万円"
+            if c["operating_cf"] is not None
+            else "営業CF         : -"
+        )
+
+        print(
+            f"設備投資       : {c['capex'] / 1e6:,.0f} 百万円"
+            if c["capex"] is not None
+            else "設備投資       : -"
+        )
+
+        print(
+            f"減価償却       : {c['depreciation'] / 1e6:,.0f} 百万円"
+            if c["depreciation"] is not None
+            else "減価償却       : -"
+        )
+
+        print()
+        print("その他")
+        print("-" * 60)
+
+        print(
+            f"土地           : {c['land'] / 1e6:,.0f} 百万円"
+            if c["land"] is not None
+            else "土地           : -"
+        )
+
+        print(
+            f"投資有価証券   : {c['investment_securities'] / 1e6:,.0f} 百万円"
+            if c["investment_securities"] is not None
+            else "投資有価証券   : -"
+        )
+
+        print()
+        print(f"DB最終確認     : {c['updated_at']}")
+
     print()
     print("-" * 67)    
     print("   直近の開示書類 (EDINET)")
@@ -305,248 +516,14 @@ def display_stock_info(stock_info):
         return
 
 
-    c = calculated
-
-    print("EDINET財務情報")
-    print(f"決算開示日     : {c['disclosure_date']}")
-    print(f"会計年度       : {c['fiscal_year']}")
-    print(f"四半期         : {c['quarter']}")
-
-    print()
-    print("バリュエーション")
-    print("-" * 60)
-
-    print(
-        f"PER            : {c['current_per']:.2f}倍"
-        if c["current_per"] is not None
-        else "PER            : -"
-    )
-
-    print(
-        f"PBR            : {c['current_pbr']:.2f}倍"
-        if c["current_pbr"] is not None
-        else "PBR            : -"
-    )
-
-    print(
-        f"EPS            : {c['eps']:.2f}円"
-        if c["eps"] is not None
-        else "EPS            : -"
-    )
-
-    print(
-        f"BPS            : {c['bps']:.2f}円"
-        if c["bps"] is not None
-        else "BPS            : -"
-    )
-
-    print(
-        f"ROE            : {c['roe'] * 100:.2f}%"
-        if c["roe"] is not None
-        else "ROE            : -"
-    )
-
-    print()
-    print("配当")
-    print("-" * 60)
-
-    print(
-        f"配当利回り     : {c['current_dividend_yield'] * 100:.2f}%"
-        if c["current_dividend_yield"] is not None
-        else "配当利回り     : -"
-    )
-
-    print(
-        f"年間配当実績   : "
-        f"{c['dividend_per_share']:.2f} 円"
-        if c["dividend_per_share"] is not None
-        else "年間配当実績   : -"
-    )
-
-    print(
-        f"中間配当       : "
-        f"{c['interim_dividend_per_share']:.2f} 円"
-        if c["interim_dividend_per_share"] is not None
-        else "中間配当       : -"
-    )
-
-    print(
-        f"期末配当       : "
-        f"{c['yearend_dividend_per_share']:.2f} 円"
-        if c["yearend_dividend_per_share"] is not None
-        else "期末配当       : -"
-    )
-
-    print(
-        f"予想年間配当   : "
-        f"{c['forecast_dividend_per_share']:.2f} 円"
-        if c["forecast_dividend_per_share"] is not None
-        else "予想年間配当   : -"
-    )
-
-    # 前年度実績
-    print()
-    print("通期実績")
-    print("-" * 60)
-
-    print(
-        f"売上高         : {c['revenue'] / 1e6:,.0f} 百万円"
-        if c["revenue"] is not None
-        else "売上高         : -"
-    )
-
-    print(
-        f"営業利益       : {c['operating_income'] / 1e6:,.0f} 百万円"
-        if c["operating_income"] is not None
-        else "営業利益       : -"
-    )
-
-    print(
-        f"経常利益       : {c['ordinary_income'] / 1e6:,.0f} 百万円"
-        if c["ordinary_income"] is not None
-        else "経常利益       : -"
-    )
-
-    print(
-        f"純利益         : {c['net_income'] / 1e6:,.0f} 百万円"
-        if c["net_income"] is not None
-        else "純利益         : -"
-    )
-
-    # ============================================================
-    # 最新決算予想
-    # ============================================================
-
-    print()
-    print("通期会社予想")
-    print("-" * 70)
-
-    print(
-        f"売上高予想     : "
-        f"{c['forecast_revenue']:,.0f} 百万円"
-        if c["forecast_revenue"] is not None
-        else "売上高予想     : -"
-    )
-
-    print(
-        f"営業利益予想   : "
-        f"{c['forecast_operating_income']:,.0f} 百万円"
-        if c["forecast_operating_income"] is not None
-        else "営業利益予想   : -"
-    )
-
-    print(
-        f"純利益予想     : "
-        f"{c['forecast_net_income']:,.0f} 百万円"
-        if c["forecast_net_income"] is not None
-        else "純利益予想     : -"
-    )
-
-    print(
-        f"EPS予想        : "
-        f"{c['forecast_eps']:.2f} 円"
-        if c["forecast_eps"] is not None
-        else "EPS予想        : -"
-    )
-
-    print()
-    print("財務")
-    print("-" * 60)
-
-    print(
-        f"自己資本比率   : {c['equity_ratio'] * 100:.2f}%"
-        if c["equity_ratio"] is not None
-        else "自己資本比率   : -"
-    )
-
-    print(
-        f"現金           : {c['cash'] / 1e6:,.0f} 百万円"
-        if c["cash"] is not None
-        else "現金           : -"
-    )
-
-    print(
-        f"総資産         : {c['total_assets'] / 1e6:,.0f} 百万円"
-        if c["total_assets"] is not None
-        else "総資産         : -"
-    )
-
-    print(
-        f"総負債         : {c['total_liabilities'] / 1e6:,.0f} 百万円"
-        if c["total_liabilities"] is not None
-        else "総負債         : -"
-    )
-
-    print(
-        f"株主資本       : {c['shareholders_equity'] / 1e6:,.0f} 百万円"
-        if c["shareholders_equity"] is not None
-        else "株主資本       : -"
-    )
-
-    print(
-        f"純資産         : {c['net_assets'] / 1e6:,.0f} 百万円"
-        if c["net_assets"] is not None
-        else "純資産         : -"
-    )
-
-    print(
-        f"有利子負債     : {c['interest_bearing_debt'] / 1e6:,.0f} 百万円"
-        if c["interest_bearing_debt"] is not None
-        else "有利子負債     : -"
-    )
-
-    print()
-    print("キャッシュ・フロー")
-    print("-" * 60)
-
-    print(
-        f"営業CF         : {c['operating_cf'] / 1e6:,.0f} 百万円"
-        if c["operating_cf"] is not None
-        else "営業CF         : -"
-    )
-
-    print(
-        f"設備投資       : {c['capex'] / 1e6:,.0f} 百万円"
-        if c["capex"] is not None
-        else "設備投資       : -"
-    )
-
-    print(
-        f"減価償却       : {c['depreciation'] / 1e6:,.0f} 百万円"
-        if c["depreciation"] is not None
-        else "減価償却       : -"
-    )
-
-    print()
-    print("その他")
-    print("-" * 60)
-
-    print(
-        f"土地           : {c['land'] / 1e6:,.0f} 百万円"
-        if c["land"] is not None
-        else "土地           : -"
-    )
-
-    print(
-        f"投資有価証券   : {c['investment_securities'] / 1e6:,.0f} 百万円"
-        if c["investment_securities"] is not None
-        else "投資有価証券   : -"
-    )
-
-    print()
-    print(f"DB最終確認     : {c['updated_at']}")
-
 # ------------------------------------------------------------
-def show_stock(conn, code):
+def show_stock(conn, code, mode="normal"):
 
     stop_event = threading.Event()
     # message_ref = ["銘柄情報を取得しています"]
     message_ref = ["銘柄情報を取得しています"]
 
-    spinner = threading.Thread(
-        target=show_spinner,
-        args=(stop_event, message_ref),
-    )
+    spinner = threading.Thread(target=show_spinner, args=(stop_event, None, None, message_ref))
 
     spinner.start()
 
@@ -567,13 +544,13 @@ def show_stock(conn, code):
         edinet_code = stock_info["edinet"]["code"]
         # EDINET CODE
         if edinet_code:
-            recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=SET_LIMIT)
+            recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=DATA_GET_LIMIT)
             # stock_info に新しいキーとして保持させる
         else:
             stock_info["recent_edinet_documents"] = []
 
         # TDInet
-        recent_tdnet_docs = get_recent_tdnet_documents(conn, code, limit=SET_LIMIT)
+        recent_tdnet_docs = get_recent_tdnet_documents(conn, code, limit=DATA_GET_LIMIT)
 
         stock_info["recent_edinet_documents"] = recent_edinet_docs
         stock_info["recent_tdnet_documents"] = recent_tdnet_docs
@@ -582,4 +559,4 @@ def show_stock(conn, code):
         stop_event.set()
         spinner.join()
 
-    display_stock_info(stock_info)
+    display_stock_info(stock_info, mode=mode)
