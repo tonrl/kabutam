@@ -98,3 +98,27 @@ def create_table_edinet_doc_list(conn):
     """)
     conn.commit()
 
+def create_table_tdnet_disclosure(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tdnet_disclosure (
+            disclosure_id TEXT PRIMARY KEY,
+            disclosure_date TEXT NOT NULL,
+            disclosure_time TEXT,
+            sec_code TEXT,
+            company_name TEXT,
+            title TEXT,
+            pdf_url TEXT,
+            market TEXT
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tdnet_sync_status (
+            target_date TEXT PRIMARY KEY,
+            document_count INTEGER DEFAULT 0,
+            last_checked_at TEXT,
+            completed INTEGER DEFAULT 0,
+            completed_at TEXT
+        )
+    """)
+    conn.commit()

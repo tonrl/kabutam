@@ -7,9 +7,12 @@ from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.stock.saveprice import ensure_recent_prices
 from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
+from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 from kabutam.display.terminal import fit_text
 from kabutam.display.colors import (colorise_profit)
 
+DOC_LIMIT=3
+TDNET_DOC_LIMIT=5
 # スタイルの定義
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -52,7 +55,7 @@ def show_spinner(stop_event, current_ref, total, status_ref):
     print("\r\033[K", end="", flush=True)
     # print("\r" + " " * 80 + "\r", end="", flush=True)
 
-def get_portfolio_recent_documents(conn, codes, limit=8):
+def get_portfolio_recent_edinet_documents(conn, codes, limit=8):
     """
     保有銘柄リストに紐づく直近の開示書類を日時降順で取得する
     """
@@ -76,6 +79,40 @@ def get_portfolio_recent_documents(conn, codes, limit=8):
     cursor = conn.execute(f"SELECT {query}", params)
     return cursor.fetchall()
 
+def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
+    """
+    保有銘柄リストに紐づく直近のTDnet開示情報を
+    開示日時の降順で取得する。
+    """
+
+    if not codes:
+        return []
+
+    placeholders = ",".join(["?"] * len(codes))
+
+    query = f"""
+        SELECT
+            T1.disclosure_id,
+            T1.disclosure_date,
+            T1.disclosure_time,
+            T1.sec_code,
+            T1.title,
+            T1.pdf_url
+        FROM tdnet_disclosure T1
+        LEFT JOIN equities_master T3
+            ON T1.sec_code = T3.Code
+        WHERE T1.sec_code IN ({placeholders})
+        ORDER BY
+            T1.disclosure_date DESC,
+            T1.disclosure_time DESC
+        LIMIT ?
+    """
+
+    params = list(codes) + [limit]
+
+    cursor = conn.execute(query, params)
+
+    return cursor.fetchall()
 
 def show_portfolio_csv(conn):
 
@@ -210,6 +247,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     try:
         sync_recent_edinet_doc_list(conn, message_ref=status_ref)
+        sync_recent_tdnet(conn, message_ref=status_ref)
     finally:
         stop_event.set()
         spinner.join()
@@ -537,16 +575,16 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # ── 既存の配当金などの表示が終わったあとに追加 ──
 
     print("=" * WIDTH)
-    print("   保有銘柄の直近の開示書類 (上位8件)")
+    print("   保有銘柄の直近のEDINET開示書類 (上位3件)")
     print("-" * WIDTH)
 
     # 保有銘柄全体のコードリストを使って直近10件を取得
-    recent_portfolio_docs = get_portfolio_recent_documents(conn, codes, limit=8)
+    recent_portfolio_edinet_docs = get_portfolio_recent_edinet_documents(conn, codes, limit=DOC_LIMIT)
 
-    if not recent_portfolio_docs:
+    if not recent_portfolio_edinet_docs:
         print("  直近の開示書類はありません。")
     else:
-        for idx, (doc_id, description, submit_dt, stock_code, company_name) in enumerate(recent_portfolio_docs, 1):
+        for idx, (doc_id, description, submit_dt, stock_code, company_name) in enumerate(recent_portfolio_edinet_docs, 1):
             url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
             styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
             styled_url = f"{FG_CYAN}{url}{RESET}"
@@ -554,4 +592,35 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
             print(f"[{idx:2d}] {stock_code} {styled_company} | {submit_dt}")
             print(f"      {description}")
             print(f"     {styled_url}")
+
+
+    recent_portfolio_tdnet_docs = get_portfolio_recent_tdnet_documents(conn, codes, limit=TDNET_DOC_LIMIT)
+    print("-" * WIDTH)
+    print("   保有銘柄の直近のTDNET開示書類 (上位3件)")
+    print("-" * WIDTH)
+
+    if not recent_portfolio_tdnet_docs:
+        print("  直近の開示書類はありません。")
+    else:
+        for idx, (disclosure_id, disclosure_date, disclosure_time, sec_code, title, pdf_url) in enumerate(recent_portfolio_tdnet_docs, 1):
+            row = conn.execute("""
+                SELECT CoName
+                FROM equities_master
+                WHERE Code = ?
+            """, (sec_code,)).fetchone()
+            company_name = row[0] if row else "不明"
+
+            styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
+            url = pdf_url
+            hyperlink = (
+                f"\033]8;;{url}\033\\"
+                f"{url}"
+                f"\033]8;;\033\\"
+            )
+
+            styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
+
+            print(f"[{idx:2d}] {sec_code} {styled_company} | {disclosure_date} {disclosure_time}")
+            print(f"      {title}")
+            print(f"   {styled_url}")
     print("=" * WIDTH)

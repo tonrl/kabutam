@@ -3,6 +3,7 @@ import threading
 import time
 from kabutam.edinet.show_corpdata import get_stock_info
 from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
+from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 from kabutam.display.terminal import fit_number
 
 SET_LIMIT = 4
@@ -51,6 +52,27 @@ def get_recent_corp_documents(conn, edinet_code, limit):
     """, (edinet_code, limit))
 
     return cursor.fetchall()
+
+def get_recent_tdnet_documents(conn, sec_code, limit):
+    """
+    指定した証券コードに紐づく直近のTDnet開示資料をDBから取得する。
+    """
+
+    cursor = conn.execute("""
+        SELECT
+            disclosure_id,
+            disclosure_date,
+            disclosure_time,
+            title,
+            pdf_url
+        FROM tdnet_disclosure
+        WHERE sec_code = ?
+        ORDER BY disclosure_date DESC, disclosure_time DESC
+        LIMIT ?
+    """, (sec_code, limit))
+
+    return cursor.fetchall()
+
 
 def calc_stock_info(stock_info):
     corpdata = stock_info["corpdata"]
@@ -192,7 +214,8 @@ def display_stock_info(stock_info):
     company = stock_info["company"]
     prices = stock_info["prices"]
     calculated = stock_info["calculated"]
-    recent_docs = stock_info.get("recent_documents", [])
+    recent_edinet_docs = stock_info.get("recent_edinet_documents", [])
+    recent_tdnet_docs = stock_info.get("recent_tdnet_documents", [])
 
     # 基本情報
     code = company["code"]
@@ -241,10 +264,10 @@ def display_stock_info(stock_info):
     print("   直近の開示書類 (EDINET)")
     print("-" * 67)
 
-    if not recent_docs:
+    if not recent_edinet_docs:
         print("  直近の開示書類はありません。")
     else:
-        for idx, (doc_id, description, submit_dt) in enumerate(recent_docs, 1):
+        for idx, (doc_id, description, submit_dt) in enumerate(recent_edinet_docs, 1):
             # 閲覧用URLの組み立て
             url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
             hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
@@ -254,6 +277,26 @@ def display_stock_info(stock_info):
             print(f"     {submit_dt}")
             print(f"   {styled_url}")
 
+    print()
+    print("-" * 67)
+    print("   直近の開示情報 (TDnet)")
+    print("-" * 67)
+    if not recent_tdnet_docs:
+        print("  直近の開示情報はありません。")
+    else:
+        for idx, (disclosure_id, disclosure_date, disclosure_time, title, pdf_url) in enumerate(recent_tdnet_docs, 1):
+
+            hyperlink = (
+                f"\033]8;;{pdf_url}\033\\"
+                f"{pdf_url}"
+                f"\033]8;;\033\\"
+            )
+
+            styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
+
+            print(f"[{idx:2d}] {title}")
+            print(f"     {disclosure_date} {disclosure_time}")
+            print(f"   {styled_url}")
     print("-" * 67)
     if calculated is None:
         print("EDINET財務情報")
@@ -509,6 +552,7 @@ def show_stock(conn, code):
 
     try:
         sync_recent_edinet_doc_list(conn, message_ref=message_ref)
+        sync_recent_tdnet(conn, message_ref=message_ref)
         message_ref[0] = "銘柄情報を取得しています"
         stock_info = get_stock_info(
             conn,
@@ -521,12 +565,18 @@ def show_stock(conn, code):
 
         stock_info = calc_stock_info(stock_info)
         edinet_code = stock_info["edinet"]["code"]
+        # EDINET CODE
         if edinet_code:
-            recent_docs = get_recent_corp_documents(conn, edinet_code, limit=SET_LIMIT)
+            recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=SET_LIMIT)
             # stock_info に新しいキーとして保持させる
-            stock_info["recent_documents"] = recent_docs
         else:
-            stock_info["recent_documents"] = []
+            stock_info["recent_edinet_documents"] = []
+
+        # TDInet
+        recent_tdnet_docs = get_recent_tdnet_documents(conn, code, limit=SET_LIMIT)
+
+        stock_info["recent_edinet_documents"] = recent_edinet_docs
+        stock_info["recent_tdnet_documents"] = recent_tdnet_docs
 
     finally:
         stop_event.set()
