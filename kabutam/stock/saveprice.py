@@ -122,7 +122,7 @@ def expected_latest_close_date(now=None):
     DBに存在すべき最新の確定終値の日付を返す
     16:30以前は当日の終値が未確定の可能性があるので前日を対象にする。
     """
-    now = now or datetime.now()
+    now = now or datetime.now(JST)
     target = now.date()
 
     if now.time() < PRICE_UPDATE_TIME:

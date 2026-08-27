@@ -2,6 +2,7 @@
 import sys
 import argparse
 import argcomplete
+from importlib.metadata import version
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 from kabutam.display.showlist import show_list
@@ -187,7 +188,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.2.0\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
+        version=f"%(prog)s {version("kabutam")}\nCopyright (C) 2026 Tonrl\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>"
         )
 
     parser.add_argument(
@@ -343,7 +344,7 @@ def main():
     # --------------------------------------------------
     # ポートフォリオ表示
     # --------------------------------------------------
-    if args.portfolio or args.minimal or args.csv:
+    if args.portfolio or args.minimal or args.csv or args.documents:
         if args.minimal:
             show_portfolio(conn, mode="minimal", sort_by=args.sort)
         elif args.documents:

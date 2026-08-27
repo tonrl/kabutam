@@ -75,8 +75,8 @@ def sync_recent_tdnet(conn, message_ref=None):
 
         total_inserted += saved_count
 
-        if index < len(target_dates) - 1:
-            time_tool.sleep(REQUEST_INTERVAL)
+    if index < len(target_dates) - 1:
+        time_tool.sleep(REQUEST_INTERVAL)
 
 
     # 古い同期情報削除

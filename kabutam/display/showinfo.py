@@ -237,9 +237,8 @@ def display_stock_info(stock_info, mode="normal"):
                 f"{fit_number(close, 10)}"
                 f"{fit_number(volume, 15, 0)}"
         )
+    c = calculated
     if (mode=="normal"):
-
-        c = calculated
 
         print("EDINET財務情報")
         print(f"決算開示日     : {c['disclosure_date']}")
@@ -543,11 +542,7 @@ def show_stock(conn, code, mode="normal"):
         stock_info = calc_stock_info(stock_info)
         edinet_code = stock_info["edinet"]["code"]
         # EDINET CODE
-        if edinet_code:
-            recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=DATA_GET_LIMIT)
-            # stock_info に新しいキーとして保持させる
-        else:
-            stock_info["recent_edinet_documents"] = []
+        recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=DATA_GET_LIMIT) if edinet_code else []
 
         # TDInet
         recent_tdnet_docs = get_recent_tdnet_documents(conn, code, limit=DATA_GET_LIMIT)

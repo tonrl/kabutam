@@ -14,7 +14,9 @@ dependencies = [
     "wcwidth",
     "jpholiday",
     "platformdirs",
-    "argcomplete"
+    "argcomplete",
+    "beautifulsoup4 "
+
 ]
 
 [project.scripts]

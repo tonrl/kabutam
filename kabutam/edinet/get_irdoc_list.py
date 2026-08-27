@@ -99,7 +99,7 @@ def sync_recent_edinet_doc_list(conn, days_to_check=EDINET_DAYS_TO_CHECK, messag
         if not documents:
             if message_ref is not None:
                 message_ref[0] = f" [{date_str}] この日は開示書類がありませんでした。"
-                continue
+            continue
 
         saved_count = save_edinet_doc_list(conn, response_json)
         if message_ref is not None:
