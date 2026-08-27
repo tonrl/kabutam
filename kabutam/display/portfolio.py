@@ -12,7 +12,7 @@ from kabutam.display.terminal import fit_text
 from kabutam.display.colors import (colorise_profit)
 
 DOC_LIMIT=3
-TDNET_DOC_LIMIT=5
+TDNET_DOC_LIMIT=6
 # スタイルの定義
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -575,7 +575,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # ── 既存の配当金などの表示が終わったあとに追加 ──
 
     print("=" * WIDTH)
-    print("   保有銘柄の直近のEDINET開示書類 (上位3件)")
+    print(f"   保有銘柄の直近のEDINET開示書類 (上位{DOC_LIMIT}件)")
     print("-" * WIDTH)
 
     # 保有銘柄全体のコードリストを使って直近10件を取得
@@ -596,7 +596,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     recent_portfolio_tdnet_docs = get_portfolio_recent_tdnet_documents(conn, codes, limit=TDNET_DOC_LIMIT)
     print("-" * WIDTH)
-    print("   保有銘柄の直近のTDNET開示書類 (上位3件)")
+    print(f"   保有銘柄の直近のTDNET開示書類 (上位{TDNET_DOC_LIMIT}件)")
     print("-" * WIDTH)
 
     if not recent_portfolio_tdnet_docs:
