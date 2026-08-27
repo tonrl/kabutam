@@ -6,8 +6,17 @@ from kabutam.db.portfolio import get_holdings
 from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.stock.saveprice import ensure_recent_prices
+from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
 from kabutam.display.terminal import fit_text
 from kabutam.display.colors import (colorise_profit)
+
+# スタイルの定義
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+FG_BRIGHT_WHITE = "\033[97m"
+FG_CYAN = "\033[36m"
+FG_GRAY = "\033[90m"
 
 def show_spinner(stop_event, current_ref, total, status_ref):
     # symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -18,17 +27,21 @@ def show_spinner(stop_event, current_ref, total, status_ref):
 
     while not stop_event.is_set():
 
-        current = current_ref[0]
+        current = current_ref[0] if current_ref else 0
         status = status_ref[0]
         if status:
             message = status
         else:
-            message = " 株価情報を更新しています"
+            message = " 処理中..."
+        if total is not None:
+            counter_str = f"({current} / {total}) "
+        else:
+            counter_str = ""
 
         print(
                 f"\r\033[K "
                 f"{symbols[i % len(symbols)]} "
-                f"({current} / {total})",
+                f"{counter_str}",
                 f"{message} ",
                 end="",
                 flush=True
@@ -38,6 +51,31 @@ def show_spinner(stop_event, current_ref, total, status_ref):
         time.sleep(0.1)
     print("\r\033[K", end="", flush=True)
     # print("\r" + " " * 80 + "\r", end="", flush=True)
+
+def get_portfolio_recent_documents(conn, codes, limit=8):
+    """
+    保有銘柄リストに紐づく直近の開示書類を日時降順で取得する
+    """
+    if not codes:
+        return []
+
+    placeholders = ",".join(["?"] * len(codes))
+
+    query = f"""
+        T1.document_id, T1.doc_description, T1.submit_datetime, T2.Code, T3.CoName
+        FROM edinet_doc_list T1
+        JOIN edinet_master T2 ON T1.EDINETCode = T2.EDINETCode
+        LEFT JOIN equities_master T3 ON T2.Code = T3.Code
+        WHERE T2.Code IN ({placeholders})
+        ORDER BY T1.submit_datetime DESC
+        LIMIT ?
+    """
+
+    params = list(codes) + [limit]
+
+    cursor = conn.execute(f"SELECT {query}", params)
+    return cursor.fetchall()
+
 
 def show_portfolio_csv(conn):
 
@@ -64,8 +102,11 @@ def show_portfolio_csv(conn):
     # 最新株価を取得
     latest_prices = {}
 
+    def on_price_event(message):
+        status_ref[0] = message
+
     for code in holdings:
-        prices = ensure_recent_prices(conn, code, 1, on_event=on_event)
+        prices = ensure_recent_prices(conn, code, 1, on_event=on_price_event)
 
         if prices:
             latest_prices[code] = prices[0][4]
@@ -161,6 +202,18 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
             + WIDTH_PROFIT
             + WIDTH_VALUE
         )
+    # 開示情報取得
+    status_ref = [" 開示書類情報を同期しています"]
+    stop_event = threading.Event()
+    spinner = threading.Thread(target=show_spinner, args=(stop_event, None, None, status_ref))
+    spinner.start()
+
+    try:
+        sync_recent_edinet_doc_list(conn, message_ref=status_ref)
+    finally:
+        stop_event.set()
+        spinner.join()
+
     # --------------------------------------------------
     # 表示前に全銘柄の最新株価を取得
     # --------------------------------------------------
@@ -188,8 +241,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     try:
         for code in holdings:
             # 前のイベント表示をクリア
-            status_ref[0] = None
-
+            status_ref[0] = " 株価情報を更新しています"
             # 株価の取得
             prices = ensure_recent_prices(conn, code, 2, on_event=on_price_event)
 
@@ -316,7 +368,8 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
         name = row[0] if row else "不明"
 
-        company = fit_text(name, 25)
+        company_raw = fit_text(name, 25)
+        company = f"{BOLD}{FG_BRIGHT_WHITE}{company_raw}{RESET}"
 
         # --------------------------------------------------
 
@@ -481,4 +534,24 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
         yield_on_value = (total_dividend_pre_tax / total_value) * 100
         print(f"配当利回り（評価額ベース）: {yield_on_value:.2f}%")
 
+    # ── 既存の配当金などの表示が終わったあとに追加 ──
+
+    print("=" * WIDTH)
+    print("   保有銘柄の直近の開示書類 (上位8件)")
+    print("-" * WIDTH)
+
+    # 保有銘柄全体のコードリストを使って直近10件を取得
+    recent_portfolio_docs = get_portfolio_recent_documents(conn, codes, limit=8)
+
+    if not recent_portfolio_docs:
+        print("  直近の開示書類はありません。")
+    else:
+        for idx, (doc_id, description, submit_dt, stock_code, company_name) in enumerate(recent_portfolio_docs, 1):
+            url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
+            styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
+            styled_url = f"{FG_CYAN}{url}{RESET}"
+
+            print(f"[{idx:2d}] {stock_code} {styled_company} | {submit_dt}")
+            print(f"      {description}")
+            print(f"     {styled_url}")
     print("=" * WIDTH)

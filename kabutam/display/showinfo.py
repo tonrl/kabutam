@@ -2,7 +2,18 @@ import sys
 import threading
 import time
 from kabutam.edinet.show_corpdata import get_stock_info
+from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
 from kabutam.display.terminal import fit_number
+
+SET_LIMIT = 4
+
+# スタイルの定義
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+FG_BRIGHT_WHITE = "\033[97m"
+FG_CYAN = "\033[36m"
+FG_GRAY = "\033[90m"
 
 def show_spinner(stop_event, message_ref):
     # symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -27,6 +38,19 @@ def show_spinner(stop_event, message_ref):
 
     print("\r\033[K", end="", flush=True)
 
+def get_recent_corp_documents(conn, edinet_code, limit):
+    """
+    指定したEDINETコードに紐づく直近の開示書類をDBから取得する
+    """
+    cursor = conn.execute("""
+        SELECT document_id, doc_description, submit_datetime
+        FROM edinet_doc_list
+        WHERE EDINETCode = ?
+        ORDER BY submit_datetime DESC
+        LIMIT ?
+    """, (edinet_code, limit))
+
+    return cursor.fetchall()
 
 def calc_stock_info(stock_info):
     corpdata = stock_info["corpdata"]
@@ -168,6 +192,7 @@ def display_stock_info(stock_info):
     company = stock_info["company"]
     prices = stock_info["prices"]
     calculated = stock_info["calculated"]
+    recent_docs = stock_info.get("recent_documents", [])
 
     # 基本情報
     code = company["code"]
@@ -213,7 +238,23 @@ def display_stock_info(stock_info):
         )
     print()
     print("-" * 67)    
+    print("   直近の開示書類 (EDINET)")
+    print("-" * 67)
 
+    if not recent_docs:
+        print("  直近の開示書類はありません。")
+    else:
+        for idx, (doc_id, description, submit_dt) in enumerate(recent_docs, 1):
+            # 閲覧用URLの組み立て
+            url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
+            hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
+            styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
+
+            print(f"[{idx:2d}] {description}")
+            print(f"     {submit_dt}")
+            print(f"   {styled_url}")
+
+    print("-" * 67)
     if calculated is None:
         print("EDINET財務情報")
         print("-" * 60)
@@ -451,6 +492,7 @@ def display_stock_info(stock_info):
 
     print()
     print(f"DB最終確認     : {c['updated_at']}")
+
 # ------------------------------------------------------------
 def show_stock(conn, code):
 
@@ -466,6 +508,8 @@ def show_stock(conn, code):
     spinner.start()
 
     try:
+        sync_recent_edinet_doc_list(conn, message_ref=message_ref)
+        message_ref[0] = "銘柄情報を取得しています"
         stock_info = get_stock_info(
             conn,
             code,
@@ -476,6 +520,13 @@ def show_stock(conn, code):
             return
 
         stock_info = calc_stock_info(stock_info)
+        edinet_code = stock_info["edinet"]["code"]
+        if edinet_code:
+            recent_docs = get_recent_corp_documents(conn, edinet_code, limit=SET_LIMIT)
+            # stock_info に新しいキーとして保持させる
+            stock_info["recent_documents"] = recent_docs
+        else:
+            stock_info["recent_documents"] = []
 
     finally:
         stop_event.set()

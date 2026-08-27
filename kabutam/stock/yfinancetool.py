@@ -28,13 +28,13 @@ def fetch_prices(code, days=3, before_today=False, on_event=None):
         )
     except Exception as e:
         if on_event:
-            on_event(f"⚠ {code}: 株価取得エラー: {e}")
+            on_event(f" {code}: 株価取得エラー: {e}")
         return []
 
     if df.empty:
         if on_event:
             on_event(
-                f"⚠ {code}: 株価データを取得できませんでした"
+                f" {code}: 株価データを取得できませんでした"
             )
 
         return []
@@ -57,7 +57,7 @@ def fetch_prices(code, days=3, before_today=False, on_event=None):
             # 再取得
             if on_event:
                 on_event(
-                    f"⚠ {code}: "
+                    f" {code}: "
                     f"{latest_date} の終値を再取得しています..."
                 )
 
@@ -78,13 +78,13 @@ def fetch_prices(code, days=3, before_today=False, on_event=None):
 
                     if on_event:
                         on_event(
-                            f"⚠ {code}: "
+                            f" {code}: "
                             f"{latest_date} の終値を再取得しました"
                         )
             else:
                 if on_event:
                     on_event(
-                            f"⚠ {code}: "
+                            f" {code}: "
                             f"{latest_date} の終値を再取得できませんでした"
                     )
 

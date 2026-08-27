@@ -9,7 +9,8 @@ from kabutam.secrets.base import SecretBackend
 APP_NAME = "kabutam"
 
 DEFAULT_PASS_PATHS = {
-    "EDINET_DB_API_KEY": "ednetdb/api/EDINET_DB_API_KEY",
+    "EDINET_DB_API_KEY": "edinetdb/api/EDINET_DB_API_KEY",
+    "EDINET_FSA_API_KEY": "edinet-fsa/api/EDINET_FSA_API_KEY",
     "JPX_JQUANTS_API_KEY": "jpx-jquants.com/api/JPX_JQUANTS_API_KEY",
 }
 
@@ -80,6 +81,11 @@ def get_edinet_api_key() -> str:
 @functools.lru_cache(maxsize=1)
 def get_jquants_api_key() -> str:
     return get_secret("JPX_JQUANTS_API_KEY")
+
+@functools.lru_cache(maxsize=1)
+def get_edinet_fsa_api_key() -> str:
+    return get_secret("EDINET_FSA_API_KEY")
+
 
 
 def get_color_scheme() -> str:

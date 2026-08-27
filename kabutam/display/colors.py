@@ -3,6 +3,7 @@ from kabutam.config import get_color_scheme
 
 RED = "\033[31m"
 GREEN = "\033[32m"
+BOLD = "\033[1m"
 RESET = "\033[0m"
 
 
@@ -17,4 +18,4 @@ def colorise_profit(value: float, text: str) -> str:
     else:
         color = GREEN if value > 0 else RED
 
-    return f"{color}{text}{RESET}"
+    return f"{BOLD}{color}{text}{RESET}"

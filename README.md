@@ -47,11 +47,11 @@ pip install -e .
 ```
 ## Configuration
 
-Kabutamでは、EDINET DBやJ-QuantsなどのAPIキーを `secret backend` を使用して管理します。
+Kabutamでは、EDINET、EDINET DBやJ-QuantsなどのAPIキーを `secret backend` を使用して管理します。
 
 デフォルトでは [pass](https://www.passwordstore.org/) を使用しますが、[D-Bus Secret Service API](https://specifications.freedesktop.org/secret-service/latest/)に対応したパスワードマネージャーも利用できます。
 
-事前に各公式サイト（[J-Quants](https://jpx-jquants.com/) / [EDINET DB](https://edinetdb.jp/)）等でAPIキーを取得し、選択した`secret backend` に登録してください
+事前に各公式サイト（[J-Quants](https://jpx-jquants.com/) / [EDINET](https://disclosure2.edinet-fsa.go.jp/WEEK0010.aspx) /[EDINET DB](https://edinetdb.jp/)）等でAPIキーを取得し、選択した`secret backend` に登録してください
 
 ### pass (デフォルト)
 J-QuantsおよびEDINET DBのAPIキーを取得し、`pass` に登録してください。
@@ -61,9 +61,13 @@ J-QuantsおよびEDINET DBのAPIキーを取得し、`pass` に登録してく�
 ```bash
 pass insert jpx-jquants.com/api/JPX_JQUANTS_API_KEY
 ```
+##### EDINET (金融庁) API キーの登録
+```bash
+pass insert edinet-fsa/api/EDINET_FSA_API_KEY
+```
 ##### EDINET DB API キーの登録
 ```bash
-pass insert ednetdb/api/EDNET_DB_API_KEY
+pass insert edinetdb/api/EDINET_DB_API_KEY
 ```
 設定ファイルを作成しない場合、`pass` がデフォルトで使用されます。
 
@@ -90,12 +94,20 @@ secret-tool store \
     service kabutam \
     username JPX_JQUANTS_API_KEY
 ```
+##### EDINET (金融庁) API キーの登録
+```bash
+secret-tool store \
+    --label="Kabutam EDINET DB API Key" \
+    service kabutam \
+    username EDINET_FSA_API_KEY
+```
+
 ##### EDINET DB API キーの登録
 ```bash
 secret-tool store \
     --label="Kabutam EDINET DB API Key" \
     service kabutam \
-    username EDNET_DB_API_KEY
+    username EDINET_DB_API_KEY
 ```
 Secret Serviceを使用する場合は、Kabutamの設定ファイルでSecret Service backendを選択してください。
 
@@ -124,7 +136,7 @@ kabutam --help
 kabutam --init
 
 # 銘柄の検索・表示
-kabutam -C 19670
+kabutam -C 72030
 
 # ポートフォリオ表示
 kabutam --portfolio

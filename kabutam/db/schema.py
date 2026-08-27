@@ -75,34 +75,25 @@ def create_table_portfolio(conn):
     """)
     conn.commit()
 
-
-def create_table_doc_data(conn):
+def create_table_edinet_doc_list(conn):
     conn.execute("""
-        CREATE TABLE edinet_corp_ir_documents (
+        CREATE TABLE IF NOT EXISTS edinet_doc_list (
             document_id TEXT PRIMARY KEY,
             EDINETCode TEXT,
-            document_id TEXT,
-            document_label_en TEXT,
-            document_label_jp TEXT,
-            pdf_link TEXT,
-            published_at TEXT,
-            UpdatedAt TEXT
+            doc_description TEXT,
+            submit_datetime TEXT,
+            pdf_flag TEXT
         )
     """)
-    conn.commit()
 
-def create_table_ir_calender_data(conn):
     conn.execute("""
-        CREATE TABLE edinet_corp_ir_calendar (
-            EDINETCode TEXT,
-            fiscal_year_end TEXT,
-            period_type TEXT,
-            announcement_date TEXT,
-            estimated_announcement_date TEXT,
-            date_status TEXT,
-            confidence TEXT,
-            UpdatedAt TEXT,
-            PRIMARY KEY (EDINETCode, fiscal_year_end, period_type)
+        CREATE TABLE IF NOT EXISTS edinet_sync_status (
+            target_date TEXT PRIMARY KEY,
+            last_seq_number INTEGER,
+            document_count INTEGER DEFAULT 0,
+            last_checked_at TEXT,
+            completed INTEGER DEFAULT 0,
+            completed_at TEXT
         )
     """)
     conn.commit()
