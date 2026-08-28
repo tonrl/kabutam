@@ -4,6 +4,7 @@ from wcwidth import wcswidth
 # 表示テキスト
 # ------------------------------------------------------------
 
+
 def fit_text(text, width):
     """
     端末上でwidthカラムに収まるように文字列を整形する。
@@ -36,5 +37,3 @@ def fit_number(value, width, decimals=1):
         return f"{'-':>{width}}"
 
     return f"{value:>{width},.{decimals}f}"
-
-

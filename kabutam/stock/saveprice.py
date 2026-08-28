@@ -1,14 +1,17 @@
 # import time as time_tool
-import jpholiday
-from datetime import datetime, timedelta, time
-from kabutam.stock.yfinancetool import fetch_prices
-from kabutam.db.schema import create_prices_table
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+
+import jpholiday
+
+from kabutam.db.schema import create_prices_table
+from kabutam.stock.yfinancetool import fetch_prices
 
 JST = ZoneInfo("Asia/Tokyo")
 
 PRICE_UPDATE_TIME = time(16, 30)
 FETCH_DAYS = 14
+
 
 def get_recent_prices(conn, code, days=3):
     """
@@ -16,7 +19,8 @@ def get_recent_prices(conn, code, days=3):
     CloseがNULLのデータは無視する。
     """
 
-    return conn.execute("""
+    return conn.execute(
+        """
         SELECT
             Date,
             Open,
@@ -34,7 +38,9 @@ def get_recent_prices(conn, code, days=3):
             AND Close IS NOT NULL
         ORDER BY Date DESC
         LIMIT ?
-    """, (code, days)).fetchall()
+    """,
+        (code, days),
+    ).fetchall()
 
 
 def get_latest_price_date(conn, code):
@@ -44,21 +50,21 @@ def get_latest_price_date(conn, code):
     """
     create_prices_table(conn)
 
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT MAX(Date)
         FROM prices
         WHERE Code = ?
             AND Close IS NOT NULL
 
-    """, (code,)).fetchone()
+    """,
+        (code,),
+    ).fetchone()
 
     if row is None or row[0] is None:
         return None
 
-    return datetime.strptime(
-        row[0],
-        "%Y-%m-%d"
-    ).date()
+    return date.fromisoformat(row[0])
 
 
 def update_prices(conn, code, days=3, before_today=False, on_event=None):
@@ -67,17 +73,13 @@ def update_prices(conn, code, days=3, before_today=False, on_event=None):
     """
 
     # records = fetch_prices(code, days)
-    records = fetch_prices(
-        code,
-        days,
-        before_today=before_today,
-        on_event=on_event
-    )
+    records = fetch_prices(code, days, before_today=before_today, on_event=on_event)
 
     if not records:
         return False
 
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO prices (
             Date,
             Code,
@@ -106,21 +108,23 @@ def update_prices(conn, code, days=3, before_today=False, on_event=None):
             :AdjClose,
             :AdjVolume
         )
-    """, records)
+    """,
+        records,
+    )
 
     conn.commit()
 
     return True
 
-def is_trading_day(date):
+
+def is_trading_day(target_date):
     """日本株の営業日かどうか"""
-    return date.weekday() < 5 and not jpholiday.is_holiday(date)
+    return target_date.weekday() < 5 and not jpholiday.is_holiday(target_date)
 
 
 def expected_latest_close_date(now=None):
     """
-    DBに存在すべき最新の確定終値の日付を返す
-    16:30以前は当日の終値が未確定の可能性があるので前日を対象にする。
+    DBに存在すべき最新の確定終値の営業日を返す
     """
     now = now or datetime.now(JST)
     target = now.date()
@@ -133,7 +137,6 @@ def expected_latest_close_date(now=None):
         target -= timedelta(days=1)
 
     return target
-
 
 
 def ensure_recent_prices(conn, code, days=3, on_event=None):
@@ -158,5 +161,3 @@ def ensure_recent_prices(conn, code, days=3, on_event=None):
             on_event=on_event,
         )
     return get_recent_prices(conn, code, days)
-
-

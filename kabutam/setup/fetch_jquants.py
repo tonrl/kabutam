@@ -1,17 +1,15 @@
-import subprocess
 import requests
-from kabutam.db.connection import get_connection
-from kabutam.config import get_secret
 
+from kabutam.config import get_secret
+from kabutam.db.connection import get_connection
 
 
 def fetch_and_save_jquants():
     print("J-Quants から銘柄マスタを取得しています...")
     JPX_API_KEY = get_secret("JPX_JQUANTS_API_KEY")
-    
+
     # passからJ-Quants APIキーを取得
     print("J-Quants: 銘柄データを取得しています。")
-
 
     URL = "https://api.jquants.com/v2/equities/master"
 
@@ -43,14 +41,17 @@ def fetch_and_save_jquants():
     )
     """)
 
-    conn.executemany("""
+    conn.executemany(
+        """
     INSERT OR REPLACE INTO equities_master (
         Code, CoName, CoNameEn, S17, S17Nm, S33, S33Nm, ScaleCat, Mkt, MktNm, Mrgn, MrgnNm, ProdCat
     )
     VALUES (
         :Code, :CoName, :CoNameEn, :S17, :S17Nm, :S33, :S33Nm, :ScaleCat, :Mkt, :MktNm, :Mrgn, :MrgnNm, :ProdCat
     )
-    """, data)
+    """,
+        data,
+    )
 
     conn.commit()
     conn.close()

@@ -1,18 +1,21 @@
-from datetime import (datetime, date)
-from kabutam.stock.saveprice import (
-        create_prices_table,
-        ensure_recent_prices,
-        expected_latest_close_date,
-        is_trading_day,
-        get_latest_price_date
-)
 import sqlite3
+from datetime import date, datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
+JST = ZoneInfo("Asia/Tokyo")
+
+from kabutam.stock.saveprice import (
+    create_prices_table,
+    ensure_recent_prices,
+    expected_latest_close_date,
+    get_latest_price_date,
+    is_trading_day,
+)
 
 
 def test_expected_latest_close_date_before_1630():
-    now = datetime(2026, 8, 21, 15, 0)
+    now = datetime(2026, 8, 21, 15, 0, tzinfo=JST)
 
     result = expected_latest_close_date(now)
 
@@ -21,7 +24,7 @@ def test_expected_latest_close_date_before_1630():
 
 def test_expected_latest_close_date_saturday():
     """土曜日なら直前の金曜日を返す"""
-    now = datetime(2026, 8, 22, 17, 0)
+    now = datetime(2026, 8, 22, 17, 0, tzinfo=JST)
 
     result = expected_latest_close_date(now)
 
@@ -29,7 +32,7 @@ def test_expected_latest_close_date_saturday():
 
 def test_expected_latest_close_date_monday_before_1630():
     """月曜日16:30前なら前週金曜日を返す"""
-    now = datetime(2026, 8, 24, 15, 0)
+    now = datetime(2026, 8, 24, 15, 0, tzinfo=JST)
 
     result = expected_latest_close_date(now)
 
@@ -215,17 +218,15 @@ def test_ensure_recent_prices_does_not_update_when_latest():
     with patch(
         "kabutam.stock.saveprice.expected_latest_close_date",
         return_value=date(2026, 8, 21),
-    ):
+    ), patch(
+        "kabutam.stock.saveprice.update_prices"
+    ) as mock_update:
 
-        with patch(
-            "kabutam.stock.saveprice.update_prices"
-        ) as mock_update:
-
-            result = ensure_recent_prices(
-                conn,
-                "72030",
-                days=3,
-            )
+        result = ensure_recent_prices(
+            conn,
+            "72030",
+            days=3,
+        )
 
     mock_update.assert_not_called()
 
@@ -259,18 +260,16 @@ def test_ensure_recent_prices_updates_when_old():
     with patch(
         "kabutam.stock.saveprice.expected_latest_close_date",
         return_value=date(2026, 8, 24),
-    ):
+    ), patch(
+        "kabutam.stock.saveprice.fetch_prices",
+        return_value=[new_record],
+    ) as mock_fetch:
 
-        with patch(
-            "kabutam.stock.saveprice.fetch_prices",
-            return_value=[new_record],
-        ) as mock_fetch:
-
-            result = ensure_recent_prices(
-                conn,
-                "72030",
-                days=3,
-            )
+        result = ensure_recent_prices(
+            conn,
+            "72030",
+            days=3,
+        )
 
     mock_fetch.assert_called_once()
 
@@ -302,18 +301,16 @@ def test_ensure_recent_prices_updates_when_no_data():
     with patch(
         "kabutam.stock.saveprice.expected_latest_close_date",
         return_value=date(2026, 8, 24),
-    ):
+    ), patch(
+        "kabutam.stock.saveprice.fetch_prices",
+        return_value=[new_record],
+    ) as mock_fetch:
 
-        with patch(
-            "kabutam.stock.saveprice.fetch_prices",
-            return_value=[new_record],
-        ) as mock_fetch:
-
-            result = ensure_recent_prices(
-                conn,
-                "72030",
-                days=3,
-            )
+        result = ensure_recent_prices(
+            conn,
+            "72030",
+            days=3,
+        )
 
     mock_fetch.assert_called_once()
 

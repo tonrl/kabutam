@@ -1,10 +1,12 @@
 # db/portfolio.py
 from kabutam.db.schema import create_table_portfolio
 
+
 def get_holding_shares(conn, code, account_type):
     create_table_portfolio(conn)
 
-    transactions = conn.execute("""
+    transactions = conn.execute(
+        """
         SELECT
             transaction_date,
             id,
@@ -14,9 +16,12 @@ def get_holding_shares(conn, code, account_type):
         WHERE Code = ?
           AND account_type = ?
         ORDER BY transaction_date, id
-    """, (code, account_type)).fetchall()
+    """,
+        (code, account_type),
+    ).fetchall()
 
-    actions = conn.execute("""
+    actions = conn.execute(
+        """
         SELECT
             effective_date,
             id,
@@ -25,38 +30,28 @@ def get_holding_shares(conn, code, account_type):
         FROM corporate_actions
         WHERE Code = ?
         ORDER BY effective_date, id
-    """, (code,)).fetchall()
+    """,
+        (code,),
+    ).fetchall()
 
     events = []
 
     # BUY / SELL
     for date, event_id, transaction_type, shares in transactions:
-        events.append((
-            date,
-            1,
-            event_id,
-            transaction_type,
-            shares
-        ))
+        events.append((date, 1, event_id, transaction_type, shares))
 
     # SPLIT
 
     for date, event_id, action_type, ratio in actions:
-        events.append((
-            date,
-            0,
-            event_id,
-            action_type,
-            ratio
-        ))
+        events.append((date, 0, event_id, action_type, ratio))
 
     # 日付 -> ID順
     events.sort(key=lambda x: (x[0], x[1], x[2]))
 
     holding_shares = 0
 
-    for (date, event_priority, event_id, event_type, value) in events:
-        if  event_type == "BUY":
+    for date, event_priority, event_id, event_type, value in events:
+        if event_type == "BUY":
             holding_shares += value
 
         elif event_type == "SELL":
@@ -65,13 +60,11 @@ def get_holding_shares(conn, code, account_type):
         elif event_type in ("SPLIT", "REVERSE_SPLIT"):
             new_shares = holding_shares * value
             if new_shares != int(new_shares):
-                raise ValueError(
-                    f"{code} の株式分割・併合により"
-                    f"端数株が発生します。"
-                )
+                raise ValueError(f"{code} の株式分割・併合により端数株が発生します。")
             holding_shares = int(new_shares)
 
     return holding_shares
+
 
 def add_buy(conn, code, account_type, shares, price, date):
     create_table_portfolio(conn)
@@ -90,7 +83,8 @@ def add_buy(conn, code, account_type, shares, price, date):
     if not date:
         raise ValueError("取引日が指定されていません。")
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO portfolio_transactions (
             Code,
             account_type,
@@ -100,13 +94,9 @@ def add_buy(conn, code, account_type, shares, price, date):
             transaction_date
         )
         VALUES (?, ?, 'BUY', ?, ?, ?)
-    """, (
-        code,
-        account_type,
-        shares,
-        price,
-        date
-    ))
+    """,
+        (code, account_type, shares, price, date),
+    )
 
     conn.commit()
 
@@ -128,25 +118,20 @@ def add_sell(conn, code, account_type, shares, price, date):
     if not date:
         raise ValueError("取引日が指定されていません。")
 
-    holding_shares = get_holding_shares(
-        conn,
-        code,
-        account_type
-    )
+    holding_shares = get_holding_shares(conn, code, account_type)
 
     if holding_shares < 0:
         raise ValueError(
-            f"{code} の保有株数が不正です。"
-            f"現在の保有株数: {holding_shares}株"
+            f"{code} の保有株数が不正です。現在の保有株数: {holding_shares}株"
         )
 
     if shares > holding_shares:
         raise ValueError(
-            f"{code} の保有株数は {holding_shares}株です。"
-            f"{shares}株は売却できません。"
+            f"{code} の保有株数は {holding_shares}株です。{shares}株は売却できません。"
         )
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO portfolio_transactions (
             Code,
             account_type,
@@ -156,19 +141,17 @@ def add_sell(conn, code, account_type, shares, price, date):
             transaction_date
         )
         VALUES (?, ?, 'SELL', ?, ?, ?)
-    """, (
-        code,
-        account_type,
-        shares,
-        price,
-        date
-    ))
+    """,
+        (code, account_type, shares, price, date),
+    )
 
     conn.commit()
 
-#------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 株式分割併合
-#------------------------------------------------------------
+# ------------------------------------------------------------
+
 
 def add_split(conn, code, ratio, date):
     create_table_portfolio(conn)
@@ -180,14 +163,10 @@ def add_split(conn, code, ratio, date):
         raise ValueError("ratioが指定されていません。")
 
     if ratio <= 0:
-        raise ValueError(
-            "ratioは0より大きい値を指定してください。"
-        )
+        raise ValueError("ratioは0より大きい値を指定してください。")
 
     if ratio == 1:
-        raise ValueError(
-            "ratioに1は指定できません。"
-        )
+        raise ValueError("ratioに1は指定できません。")
 
     if ratio > 1:
         action_type = "SPLIT"
@@ -198,13 +177,16 @@ def add_split(conn, code, ratio, date):
     # 現在の保有株数に対して端数が発生するか確認
     # --------------------------------------------------------
 
-    account_type = conn.execute("""
+    account_types = conn.execute(
+        """
         SELECT DISTINCT account_type
         FROM portfolio_transactions
         WHERE Code = ?
-    """, (code,)).fetchall()
+    """,
+        (code,),
+    ).fetchall()
 
-    for (account_type,) in account_type:
+    for (account_type,) in account_types:
         shares = get_holding_shares(conn, code, account_type)
         if shares <= 0:
             continue
@@ -216,8 +198,8 @@ def add_split(conn, code, ratio, date):
                 f" {shares}株 × {ratio} = {new_shares}株"
             )
 
-
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO corporate_actions (
             Code,
             action_type,
@@ -225,14 +207,12 @@ def add_split(conn, code, ratio, date):
             effective_date
         )
         VALUES (?, ?, ?, ?)
-    """, (
-        code,
-        action_type,
-        ratio,
-        date
-    ))
+    """,
+        (code, action_type, ratio, date),
+    )
 
     conn.commit()
+
 
 def get_transactions(conn, code=None):
     create_table_portfolio(conn)
@@ -251,7 +231,8 @@ def get_transactions(conn, code=None):
             ORDER BY transaction_date, id
         """).fetchall()
 
-    return conn.execute("""
+    return conn.execute(
+        """
         SELECT
             id,
             Code,
@@ -263,11 +244,15 @@ def get_transactions(conn, code=None):
         FROM portfolio_transactions
         WHERE Code = ?
         ORDER BY transaction_date, id
-    """, (code,)).fetchall()
+    """,
+        (code,),
+    ).fetchall()
+
 
 # ------------------------------------------------------------
 # 現在の保有状況
 # ------------------------------------------------------------
+
 
 def get_holdings(conn):
     create_table_portfolio(conn)
@@ -302,78 +287,80 @@ def get_holdings(conn):
     # BUY / SELL
     # --------------------------------------------------------
 
-    for (date, event_id, code, account_type, transaction_type, shares, price) in transactions:
-        events.append({
-            "date": date,
-            "priority": 1,
-            "id": event_id,
-            "type": "TRANSACTION",
-            "code": code,
-            "account_type": account_type,
-            "action": transaction_type,
-            "shares": shares,
-            "price": price,
-        })
+    for (
+        date,
+        event_id,
+        code,
+        account_type,
+        transaction_type,
+        shares,
+        price,
+    ) in transactions:
+        events.append(
+            {
+                "date": date,
+                "priority": 1,
+                "id": event_id,
+                "type": "TRANSACTION",
+                "code": code,
+                "account_type": account_type,
+                "action": transaction_type,
+                "shares": shares,
+                "price": price,
+            }
+        )
     # --------------------------------------------------------
     # SPLIT / REVERSE_SPLIT
     # --------------------------------------------------------
 
-    for (date, event_id, code, action_type, ratio) in actions:
-        events.append({
-            "date": date,
-            "priority": 0,
-            "id": event_id,
-            "type": "CORPORATE_ACTION",
-            "code": code,
-            "account_type": None,
-            "action": action_type,
-            "shares": None,
-            "price": None,
-            "ratio": ratio,
-        })
+    for date, event_id, code, action_type, ratio in actions:
+        events.append(
+            {
+                "date": date,
+                "priority": 0,
+                "id": event_id,
+                "type": "CORPORATE_ACTION",
+                "code": code,
+                "account_type": None,
+                "action": action_type,
+                "shares": None,
+                "price": None,
+                "ratio": ratio,
+            }
+        )
 
     # --------------------------------------------------------
     # 日付順
     # --------------------------------------------------------
-    events.sort(
-            key=lambda event: (
-                event["date"],
-                event["priority"],
-                event["id"]
-            )
-    )
+    events.sort(key=lambda event: (event["date"], event["priority"], event["id"]))
 
     holdings = {}
 
-    #　イベント処理
+    # 　イベント処理
     # for (date, event_id, event_group, code, account_type, event_type, value, price) in events:
     for event in events:
         code = event["code"]
         # ====================================================
         # 株式分割・併合
         # ====================================================
-        if event["type"]  == "CORPORATE_ACTION":
+        if event["type"] == "CORPORATE_ACTION":
             ratio = event["ratio"]
 
             if ratio <= 0:
-                raise ValueError(
-                        f"{code} の企業イベントに"
-                        f"不正なratioがあります。"
-                )
+                raise ValueError(f"{code} の企業イベントに不正なratioがあります。")
 
             if code not in holdings:
                 continue
 
             for holding in holdings[code].values():
-
                 new_shares = holding["shares"] * ratio
 
                 if new_shares != int(new_shares):
                     raise ValueError(
-                            f"{code} の株式分割・併合で"
-                            f"端数株が発生します。"
-                            f" {holding['shares']}株 × {ratio}"
-                            f" = {new_shares}株"
+                        f"{code} の株式分割・併合で"
+                        f"端数株が発生します。"
+                        f" {holding['shares']}株 × {ratio}"
+                        f" = {new_shares}株"
                     )
 
                 holding["shares"] = int(new_shares)
@@ -391,10 +378,7 @@ def get_holdings(conn):
             holdings[code] = {}
         # 口座を初期化
         if account_type not in holdings[code]:
-            holdings[code][account_type] = {
-                "shares": 0,
-                "cost": 0.0
-            }
+            holdings[code][account_type] = {"shares": 0, "cost": 0.0}
 
         holding = holdings[code][account_type]
 
@@ -412,14 +396,10 @@ def get_holdings(conn):
         elif transaction_type == "SELL":
             if holding["shares"] <= 0:
                 raise ValueError(
-                        f"{code} の {account_type} に"
-                        f"保有株がない状態で売却記録があります。"
+                    f"{code} の {account_type} に保有株がない状態で売却記録があります。"
                 )
             if shares <= 0:
-                raise ValueError(
-                        f"{code} の売却株数が不正です。"
-                        f"売却株数: {shares}"
-                )
+                raise ValueError(f"{code} の売却株数が不正です。売却株数: {shares}")
 
             if shares > holding["shares"]:
                 raise ValueError(
@@ -427,18 +407,10 @@ def get_holdings(conn):
                     f"{shares}株の売却記録があります。"
                 )
             if price is None or price <= 0:
-                raise ValueError(
-                        f"{code} の売却価格が不正です。"
-                        f"売却価格: {price}"
-                )
+                raise ValueError(f"{code} の売却価格が不正です。売却価格: {price}")
 
-            average_price = (
-                    holding["cost"] /
-                    holding["shares"]
-            )
-            holding["cost"] -= (
-                    average_price * shares
-            )
+            average_price = holding["cost"] / holding["shares"]
+            holding["cost"] -= average_price * shares
 
             holding["shares"] -= shares
 
@@ -454,8 +426,6 @@ def get_holdings(conn):
     # 平均取得単価を追加
     for accounts in holdings.values():
         for data in accounts.values():
-            data["average_price"] = (
-                    data["cost"] / data["shares"]
-            )
+            data["average_price"] = data["cost"] / data["shares"]
 
     return holdings

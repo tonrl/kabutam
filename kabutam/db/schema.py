@@ -49,6 +49,7 @@ def create_table_corp_data(conn):
     """)
     conn.commit()
 
+
 def create_prices_table(conn):
     """pricesテーブルが存在しない場合に作成する"""
     conn.execute("""
@@ -69,6 +70,7 @@ def create_prices_table(conn):
         )
     """)
     conn.commit()
+
 
 def create_table_portfolio(conn):
     conn.execute("""
@@ -96,6 +98,7 @@ def create_table_portfolio(conn):
     """)
     conn.commit()
 
+
 def create_table_edinet_doc_list(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS edinet_doc_list (
@@ -118,6 +121,7 @@ def create_table_edinet_doc_list(conn):
         )
     """)
     conn.commit()
+
 
 def create_table_tdnet_disclosure(conn):
     conn.execute("""

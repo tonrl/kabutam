@@ -8,7 +8,7 @@ Terminal-based stock and portfolio tracking tool for Japanese stocks.
 - Lightweight and easy to use
 
 ## Prerequisites
-- Python 3.11 or later
+- Python 3.12 or later
 - Git (ソースからのインストール時)
 - `pass` (pass を使用する場合)
 - `libsecret` (`secret-tool`) (Secret Serviceを使用する場合)

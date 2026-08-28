@@ -39,8 +39,6 @@ class SecretServiceBackend(SecretBackend):
         value = result.stdout.strip()
 
         if not value:
-            raise RuntimeError(
-                f"secret '{name}' が空です。"
-            )
+            raise RuntimeError(f"secret '{name}' が空です。")
 
         return value

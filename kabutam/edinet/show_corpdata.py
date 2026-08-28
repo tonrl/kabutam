@@ -1,13 +1,15 @@
-from kabutam.db.schema import create_table_corp_data
 from kabutam.db.connection import require_edi_data
-from kabutam.stock.saveprice import ensure_recent_prices
+from kabutam.db.schema import create_table_corp_data
 from kabutam.edinet.get_corpdata import get_corpdata
+from kabutam.stock.saveprice import ensure_recent_prices
+
 
 # ------------------------------------------------------------
 # 銘柄コード検索
 # ------------------------------------------------------------
 def get_stock_info(conn, code, message_ref=None):
-    company = conn.execute("""
+    company = conn.execute(
+        """
         SELECT
             Code,
             CoName,
@@ -18,43 +20,40 @@ def get_stock_info(conn, code, message_ref=None):
             MktNm
         FROM equities_master
         WHERE Code = ?
-    """, (code,)).fetchone()
+    """,
+        (code,),
+    ).fetchone()
 
     if company is None:
         return None
 
-    edinetdata = conn.execute("""
+    edinetdata = conn.execute(
+        """
         SELECT 
             EDINETCode,
             ListingStatus 
         FROM edinet_master 
         WHERE Code = ? 
-    """, (code,)).fetchone()
+    """,
+        (code,),
+    ).fetchone()
 
     if message_ref:
         message_ref[0] = " 株価情報を取得しています"
 
     prices = ensure_recent_prices(conn, code, 3)
     if prices:
-        latest_price = prices[0][4]   # Date, Open, High, Low, Close, Volume...
+        latest_price = prices[0][4]  # Date, Open, High, Low, Close, Volume...
     else:
         latest_price = None
-    
+
     # 基本情報
-    (
-        code,
-        name,
-        name_en,
-        sector17,
-        sector33,
-        scale,
-        market
-    ) = company
+    (code, name, name_en, sector17, sector33, scale, market) = company
 
     if edinetdata is not None:
-        edinetcode, listing_status = edinetdata 
-    else: 
-        edinetcode = None 
+        edinetcode, listing_status = edinetdata
+    else:
+        edinetcode = None
         listing_status = None
 
     # EDINET 情報
@@ -67,7 +66,7 @@ def get_stock_info(conn, code, message_ref=None):
             create_table_corp_data(conn)
 
         corpdata = get_corpdata(conn, edinetcode, message_ref)
-    
+
     return {
         "company": {
             "code": code,
@@ -78,14 +77,11 @@ def get_stock_info(conn, code, message_ref=None):
             "scale": scale,
             "market": market,
         },
-
         "edinet": {
             "code": edinetcode,
             "listing_status": listing_status,
         },
-
         "prices": prices,
         "latest_price": latest_price,
         "corpdata": corpdata,
     }
-

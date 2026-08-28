@@ -1,5 +1,7 @@
 import sqlite3
+
 from kabutam.db.portfolio import add_buy, get_holdings
+
 
 def test_get_holdings_average_price():
     with sqlite3.connect(":memory:") as conn:

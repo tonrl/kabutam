@@ -1,10 +1,10 @@
 import sqlite3
 
 from kabutam.db.portfolio import (
-        add_buy,
-        add_sell,
-        get_transactions,
-        get_holdings,
+    add_buy,
+    add_sell,
+    get_holdings,
+    get_transactions,
 )
 
 

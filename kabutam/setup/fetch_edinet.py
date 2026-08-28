@@ -1,9 +1,11 @@
-import subprocess
+from datetime import UTC, datetime
+
 import requests
-from datetime import datetime
+
 from kabutam.db.connection import get_connection
 
 BASE_URL = "https://edinetdb.jp/v1/search"
+
 
 def create_edinet_table(conn):
     conn.execute("""
@@ -16,12 +18,14 @@ def create_edinet_table(conn):
         )
     """)
 
+
 def search_edinet(code):
     params = {"q": code}
     # resp = requests.get(BASE_URL, params=params, headers=headers, timeout=30)
     resp = requests.get(BASE_URL, params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()
+
 
 def fetch_and_save_edinet():
     print("EDINET DB から対照表の作成を開始します...")
@@ -43,9 +47,12 @@ def fetch_and_save_edinet():
     print(f"対象銘柄数: {len(codes)} 件")
 
     for (code,) in codes:
-        exists = conn.execute("""
+        exists = conn.execute(
+            """
             SELECT 1 FROM edinet_master WHERE Code = ?
-        """, (code,)).fetchone()
+        """,
+            (code,),
+        ).fetchone()
 
         if exists:
             continue
@@ -57,26 +64,32 @@ def fetch_and_save_edinet():
 
             if not data:
                 print("  -> not found")
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO edinet_master (Code, UpdatedAt)
                     VALUES (?, ?)
-                """, (code, datetime.now().isoformat(timespec="seconds")))
+                """,
+                    (code, datetime.now(UTC).isoformat(timespec="seconds")),
+                )
                 conn.commit()
                 continue
 
             row = data[0]
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO edinet_master (
                     Code, EDINETCode, CompanyName, ListingStatus, UpdatedAt
                 )
                 VALUES (?, ?, ?, ?, ?)
-            """, (
-                code,
-                row.get("edinet_code"),
-                row.get("name"),
-                row.get("listing_status"),
-                datetime.now().isoformat(timespec="seconds")
-            ))
+            """,
+                (
+                    code,
+                    row.get("edinet_code"),
+                    row.get("name"),
+                    row.get("listing_status"),
+                    datetime.now(UTC).isoformat(timespec="seconds"),
+                ),
+            )
             conn.commit()
             print(f"  -> {row.get('edinet_code')} {row.get('name')}")
 

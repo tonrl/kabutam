@@ -4,13 +4,8 @@ from kabutam.display.terminal import fit_text
 # 銘柄一覧
 # ------------------------------------------------------------
 
-def show_list(
-        conn,
-        title,
-        conditions,
-        hide_market=False,
-        hide_scale=False
-):
+
+def show_list(conn, title, conditions, hide_market=False, hide_scale=False):
     where = []
     params = []
 
@@ -35,10 +30,7 @@ def show_list(
         ORDER BY Code
     """
 
-    companies = conn.execute(
-        query,
-        params
-    ).fetchall()
+    companies = conn.execute(query, params).fetchall()
 
     if not companies:
         print(f"{title} に該当する銘柄がありません。")
@@ -49,10 +41,7 @@ def show_list(
     print("=" * 80)
 
     # ヘッダー
-    header = (
-        f"{'Code':<8}"
-        f"{fit_text('Company', 30)}"
-    )
+    header = f"{'Code':<8}{fit_text('Company', 30)}"
 
     if not hide_market:
         header += fit_text("Market", 12)
@@ -66,11 +55,7 @@ def show_list(
     print("-" * 80)
 
     for code, name, sector, market, scale in companies:
-
-        line = (
-            f"{code:<8}"
-            f"{fit_text(name, 31)}"
-        )
+        line = f"{code:<8}{fit_text(name, 31)}"
 
         if not hide_market:
             line += fit_text(market, 12)
@@ -81,5 +66,3 @@ def show_list(
         line += fit_text(sector, 20)
 
         print(line)
-
-

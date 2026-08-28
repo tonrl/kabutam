@@ -1,11 +1,10 @@
-import time
 import threading
-import sys
-from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
-from kabutam.edinet.show_corpdata import get_stock_info
-from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
-from kabutam.display.terminal import fit_number
+
 from kabutam.animations.spinners import show_spinner
+from kabutam.display.terminal import fit_number
+from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
+from kabutam.edinet.show_corpdata import get_stock_info
+from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 
 DATA_GET_LIMIT = 6
 
@@ -17,26 +16,32 @@ FG_BRIGHT_WHITE = "\033[97m"
 DIM = "\033[2m"
 BOLD = "\033[1m"
 
+
 def get_recent_corp_documents(conn, edinet_code, limit):
     """
     指定したEDINETコードに紐づく直近の開示書類をDBから取得する
     """
-    cursor = conn.execute("""
+    cursor = conn.execute(
+        """
         SELECT document_id, doc_description, submit_datetime
         FROM edinet_doc_list
         WHERE EDINETCode = ?
         ORDER BY submit_datetime DESC
         LIMIT ?
-    """, (edinet_code, limit))
+    """,
+        (edinet_code, limit),
+    )
 
     return cursor.fetchall()
+
 
 def get_recent_tdnet_documents(conn, sec_code, limit):
     """
     指定した証券コードに紐づく直近のTDnet開示資料をDBから取得する。
     """
 
-    cursor = conn.execute("""
+    cursor = conn.execute(
+        """
         SELECT
             disclosure_id,
             disclosure_date,
@@ -47,7 +52,9 @@ def get_recent_tdnet_documents(conn, sec_code, limit):
         WHERE sec_code = ?
         ORDER BY disclosure_date DESC, disclosure_time DESC
         LIMIT ?
-    """, (sec_code, limit))
+    """,
+        (sec_code, limit),
+    )
 
     return cursor.fetchall()
 
@@ -61,49 +68,41 @@ def calc_stock_info(stock_info):
             "calculated": None,
         }
     (
-            edinet_code,
-            disclosure_date,
-            fiscal_year,
-            quarter,
-
-            per,
-            pbr,
-            eps,
-            bps,
-            roe,
-
-            dividend_yield,
-            dividend_per_share,
-            interim_dividend_per_share,
-            yearend_dividend_per_share,
-            forecast_dividend_per_share,
-
-            revenue,
-            operating_income,
-            ordinary_income,
-            net_income,
-
-            forecast_revenue,
-            forecast_operating_income,
-            forecast_net_income,
-            forecast_eps,
-
-            equity_ratio,
-            cash,
-            total_assets,
-            total_liabilities,
-            shareholders_equity,
-            net_assets,
-
-            operating_cf,
-            capex,
-            depreciation,
-            interest_bearing_debt,
-
-            land,
-            investment_securities,
-
-            updated_at
+        edinet_code,
+        disclosure_date,
+        fiscal_year,
+        quarter,
+        per,
+        pbr,
+        eps,
+        bps,
+        roe,
+        dividend_yield,
+        dividend_per_share,
+        interim_dividend_per_share,
+        yearend_dividend_per_share,
+        forecast_dividend_per_share,
+        revenue,
+        operating_income,
+        ordinary_income,
+        net_income,
+        forecast_revenue,
+        forecast_operating_income,
+        forecast_net_income,
+        forecast_eps,
+        equity_ratio,
+        cash,
+        total_assets,
+        total_liabilities,
+        shareholders_equity,
+        net_assets,
+        operating_cf,
+        capex,
+        depreciation,
+        interest_bearing_debt,
+        land,
+        investment_securities,
+        updated_at,
     ) = corpdata
 
     latest_price = stock_info["latest_price"]
@@ -118,64 +117,52 @@ def calc_stock_info(stock_info):
             current_per = latest_price / eps
         if bps is not None and bps > 0:
             current_pbr = latest_price / bps
-    
+
     current_dividend_yield = None
     if (
-            latest_price is not None
-            and forecast_dividend_per_share is not None
-            and latest_price > 0
+        latest_price is not None
+        and forecast_dividend_per_share is not None
+        and latest_price > 0
     ):
-        current_dividend_yield = (
-                forecast_dividend_per_share / latest_price
-        )
+        current_dividend_yield = forecast_dividend_per_share / latest_price
     return {
         **stock_info,
-
         "calculated": {
             "edinet_code": edinet_code,
             "disclosure_date": disclosure_date,
             "fiscal_year": fiscal_year,
             "quarter": quarter,
-
             "per": per,
             "pbr": pbr,
             "eps": eps,
             "bps": bps,
             "roe": roe,
-
             "dividend_yield": dividend_yield,
             "dividend_per_share": dividend_per_share,
             "interim_dividend_per_share": interim_dividend_per_share,
             "yearend_dividend_per_share": yearend_dividend_per_share,
             "forecast_dividend_per_share": forecast_dividend_per_share,
-
             "revenue": revenue,
             "operating_income": operating_income,
             "ordinary_income": ordinary_income,
             "net_income": net_income,
-
             "forecast_revenue": forecast_revenue,
             "forecast_operating_income": forecast_operating_income,
             "forecast_net_income": forecast_net_income,
             "forecast_eps": forecast_eps,
-
             "equity_ratio": equity_ratio,
             "cash": cash,
             "total_assets": total_assets,
             "total_liabilities": total_liabilities,
             "shareholders_equity": shareholders_equity,
             "net_assets": net_assets,
-
             "operating_cf": operating_cf,
             "capex": capex,
             "depreciation": depreciation,
             "interest_bearing_debt": interest_bearing_debt,
-
             "land": land,
             "investment_securities": investment_securities,
-
             "updated_at": updated_at,
-
             # 計算値
             "edinet_per": edinet_per,
             "edinet_pbr": edinet_pbr,
@@ -184,6 +171,7 @@ def calc_stock_info(stock_info):
             "current_dividend_yield": current_dividend_yield,
         },
     }
+
 
 # ------------------------------------------------------------
 # Display Info
@@ -205,7 +193,7 @@ def display_stock_info(stock_info, mode="normal"):
     market = company["market"]
     edinetcode = stock_info["edinet"]["code"]
 
-    print("=" * 60)
+    print("=" * 67)
     print(f"銘柄コード : {code}")
     print(f"会社名     : {name}")
     print(f"英語名     : {name_en}")
@@ -214,37 +202,39 @@ def display_stock_info(stock_info, mode="normal"):
     print(f"規模区分   : {scale}")
     print(f"市場       : {market}")
     print(f"EDI Code   : {edinetcode}")
-    print("=" * 60)
+    print("=" * 67)
 
     print("過去3営業日の株価")
     print("-" * 67)
-    print(
-            f"{'Date':<12}"
-            f"{'Open':>10}"
-            f"{'High':>10}"
-            f"{'Low':>10}"
-            f"{'Close':>10}"
-            f"{'Volume':>15}"
-            )
+    print(f"{'Date':<12}{'Open':>10}{'High':>10}{'Low':>10}{'Close':>10}{'Volume':>15}")
 
     for price in prices:
         date, open_, high, low, close, volume, *_ = price
         print(
-                f"{date:<12}"
-                f"{fit_number(open_, 10)}"
-                f"{fit_number(high, 10)}"
-                f"{fit_number(low, 10)}"
-                f"{fit_number(close, 10)}"
-                f"{fit_number(volume, 15, 0)}"
+            f"{date:<12}"
+            f"{fit_number(open_, 10)}"
+            f"{fit_number(high, 10)}"
+            f"{fit_number(low, 10)}"
+            f"{fit_number(close, 10)}"
+            f"{fit_number(volume, 15, 0)}"
         )
-    c = calculated
-    if (mode=="normal"):
+    if calculated is None:
+        print("=" * 67)
+        print()
+        print("EDINET財務情報")
+        print("-" * 60)
+        print("取得できませんでした。")
+        print("-" * 60)
+        return
 
+    c = calculated
+    if mode == "normal":
+        print("-" * 67)
+        print()
         print("EDINET財務情報")
         print(f"決算開示日     : {c['disclosure_date']}")
         print(f"会計年度       : {c['fiscal_year']}")
         print(f"四半期         : {c['quarter']}")
-
         print()
         print("バリュエーション")
         print("-" * 60)
@@ -290,29 +280,25 @@ def display_stock_info(stock_info, mode="normal"):
         )
 
         print(
-            f"年間配当実績   : "
-            f"{c['dividend_per_share']:.2f} 円"
+            f"年間配当実績   : {c['dividend_per_share']:.2f} 円"
             if c["dividend_per_share"] is not None
             else "年間配当実績   : -"
         )
 
         print(
-            f"中間配当       : "
-            f"{c['interim_dividend_per_share']:.2f} 円"
+            f"中間配当       : {c['interim_dividend_per_share']:.2f} 円"
             if c["interim_dividend_per_share"] is not None
             else "中間配当       : -"
         )
 
         print(
-            f"期末配当       : "
-            f"{c['yearend_dividend_per_share']:.2f} 円"
+            f"期末配当       : {c['yearend_dividend_per_share']:.2f} 円"
             if c["yearend_dividend_per_share"] is not None
             else "期末配当       : -"
         )
 
         print(
-            f"予想年間配当   : "
-            f"{c['forecast_dividend_per_share']:.2f} 円"
+            f"予想年間配当   : {c['forecast_dividend_per_share']:.2f} 円"
             if c["forecast_dividend_per_share"] is not None
             else "予想年間配当   : -"
         )
@@ -355,29 +341,25 @@ def display_stock_info(stock_info, mode="normal"):
         print("-" * 70)
 
         print(
-            f"売上高予想     : "
-            f"{c['forecast_revenue']:,.0f} 百万円"
+            f"売上高予想     : {c['forecast_revenue']:,.0f} 百万円"
             if c["forecast_revenue"] is not None
             else "売上高予想     : -"
         )
 
         print(
-            f"営業利益予想   : "
-            f"{c['forecast_operating_income']:,.0f} 百万円"
+            f"営業利益予想   : {c['forecast_operating_income']:,.0f} 百万円"
             if c["forecast_operating_income"] is not None
             else "営業利益予想   : -"
         )
 
         print(
-            f"純利益予想     : "
-            f"{c['forecast_net_income']:,.0f} 百万円"
+            f"純利益予想     : {c['forecast_net_income']:,.0f} 百万円"
             if c["forecast_net_income"] is not None
             else "純利益予想     : -"
         )
 
         print(
-            f"EPS予想        : "
-            f"{c['forecast_eps']:.2f} 円"
+            f"EPS予想        : {c['forecast_eps']:.2f} 円"
             if c["forecast_eps"] is not None
             else "EPS予想        : -"
         )
@@ -469,8 +451,7 @@ def display_stock_info(stock_info, mode="normal"):
         print()
         print(f"DB最終確認     : {c['updated_at']}")
 
-    print()
-    print("-" * 67)    
+    print("-" * 67)
     print("   直近の開示書類 (EDINET)")
     print("-" * 67)
 
@@ -494,13 +475,14 @@ def display_stock_info(stock_info, mode="normal"):
     if not recent_tdnet_docs:
         print("  直近の開示情報はありません。")
     else:
-        for idx, (disclosure_id, disclosure_date, disclosure_time, title, pdf_url) in enumerate(recent_tdnet_docs, 1):
-
-            hyperlink = (
-                f"\033]8;;{pdf_url}\033\\"
-                f"{pdf_url}"
-                f"\033]8;;\033\\"
-            )
+        for idx, (
+            disclosure_id,
+            disclosure_date,
+            disclosure_time,
+            title,
+            pdf_url,
+        ) in enumerate(recent_tdnet_docs, 1):
+            hyperlink = f"\033]8;;{pdf_url}\033\\{pdf_url}\033]8;;\033\\"
 
             styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
 
@@ -508,11 +490,6 @@ def display_stock_info(stock_info, mode="normal"):
             print(f"     {disclosure_date} {disclosure_time}")
             print(f"   {styled_url}")
     print("-" * 67)
-    if calculated is None:
-        print("EDINET財務情報")
-        print("-" * 60)
-        print("取得できませんでした。")
-        return
 
 
 # ------------------------------------------------------------
@@ -522,7 +499,9 @@ def show_stock(conn, code, mode="normal"):
     # message_ref = ["銘柄情報を取得しています"]
     message_ref = ["銘柄情報を取得しています"]
 
-    spinner = threading.Thread(target=show_spinner, args=(stop_event, None, None, message_ref))
+    spinner = threading.Thread(
+        target=show_spinner, args=(stop_event, None, None, message_ref)
+    )
 
     spinner.start()
 
@@ -542,7 +521,11 @@ def show_stock(conn, code, mode="normal"):
         stock_info = calc_stock_info(stock_info)
         edinet_code = stock_info["edinet"]["code"]
         # EDINET CODE
-        recent_edinet_docs = get_recent_corp_documents(conn, edinet_code, limit=DATA_GET_LIMIT) if edinet_code else []
+        recent_edinet_docs = (
+            get_recent_corp_documents(conn, edinet_code, limit=DATA_GET_LIMIT)
+            if edinet_code
+            else []
+        )
 
         # TDInet
         recent_tdnet_docs = get_recent_tdnet_documents(conn, code, limit=DATA_GET_LIMIT)

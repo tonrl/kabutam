@@ -23,9 +23,7 @@ class PassBackend(SecretBackend):
                 check=True,
             )
         except FileNotFoundError as e:
-            raise RuntimeError(
-                "pass コマンドが見つかりません。"
-            ) from e
+            raise RuntimeError("pass コマンドが見つかりません。") from e
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
                 f"pass から secret '{name}' を取得できませんでした。"
@@ -34,8 +32,6 @@ class PassBackend(SecretBackend):
         value = result.stdout.splitlines()[0].strip()
 
         if not value:
-            raise RuntimeError(
-                f"secret '{name}' が空です。"
-            )
+            raise RuntimeError(f"secret '{name}' が空です。")
 
         return value

@@ -1,7 +1,7 @@
-import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+import requests
+from bs4 import BeautifulSoup
 
 TDNET_BASE_URL = "https://www.release.tdnet.info/inbs/"
 
@@ -33,11 +33,7 @@ def search_tdnet_doc_list_data(date_str):
     page = 1
 
     while True:
-
-        url = (
-            f"{TDNET_BASE_URL}"
-            f"I_list_{page:03d}_{date_compact}.html"
-        )
+        url = f"{TDNET_BASE_URL}I_list_{page:03d}_{date_compact}.html"
 
         response = requests.get(url, timeout=10)
 
@@ -54,19 +50,20 @@ def search_tdnet_doc_list_data(date_str):
             break
 
         for row in rows:
-
             time_cell = row.select_one(".kjTime")
             code_cell = row.select_one(".kjCode")
             name_cell = row.select_one(".kjName")
             title_cell = row.select_one(".kjTitle")
             place_cell = row.select_one(".kjPlace")
 
-            if not all([
-                time_cell,
-                code_cell,
-                name_cell,
-                title_cell,
-            ]):
+            if not all(
+                [
+                    time_cell,
+                    code_cell,
+                    name_cell,
+                    title_cell,
+                ]
+            ):
                 continue
 
             link = title_cell.find("a")
@@ -80,18 +77,17 @@ def search_tdnet_doc_list_data(date_str):
             title = title_cell.get_text(strip=True)
             pdf_url = urljoin(url, link.get("href"))
 
-            all_documents.append({
-                "disclosure_date": date_str,
-                "disclosure_time": disclosure_time,
-                "sec_code": sec_code,
-                "company_name": company_name,
-                "title": title,
-                "pdf_url": pdf_url,
-                "market": (
-                    place_cell.get_text(strip=True)
-                    if place_cell else None
-                ),
-            })
+            all_documents.append(
+                {
+                    "disclosure_date": date_str,
+                    "disclosure_time": disclosure_time,
+                    "sec_code": sec_code,
+                    "company_name": company_name,
+                    "title": title,
+                    "pdf_url": pdf_url,
+                    "market": (place_cell.get_text(strip=True) if place_cell else None),
+                }
+            )
 
         # 次ページが存在するか
         next_page = soup.select_one(

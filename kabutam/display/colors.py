@@ -1,6 +1,5 @@
 from kabutam.config import get_color_scheme
 
-
 RED = "\033[31m"
 GREEN = "\033[32m"
 BOLD = "\033[1m"

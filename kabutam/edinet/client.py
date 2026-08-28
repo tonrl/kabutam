@@ -1,5 +1,6 @@
 import requests
-from kabutam.config import (get_edinet_api_key, get_edinet_fsa_api_key)
+
+from kabutam.config import get_edinet_api_key, get_edinet_fsa_api_key
 
 EDINET_DB_BASE_URL = "https://edinetdb.jp/v1"
 EDINET_FSA_BASE_URL = "https://api.edinet-fsa.go.jp/api/v2"
@@ -14,24 +15,18 @@ def search_edinet_data(edinet_code):
         print("Error: EDINET DB API key is empty")
         return None
 
-    HEADERS = {
-            "X-API-Key": EDINET_DB_API_KEY
-    }
+    HEADERS = {"X-API-Key": EDINET_DB_API_KEY}
 
     url = f"{EDINET_DB_BASE_URL}/companies/{edinet_code}"
 
     try:
-        resp = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=30
-        )
+        resp = requests.get(url, headers=HEADERS, timeout=30)
 
         resp.raise_for_status()
         return resp.json()
 
-    except requests.Timeout: 
-        print("エラー: EDINET DB APIへの接続がタイムアウトしました。") 
+    except requests.Timeout:
+        print("エラー: EDINET DB APIへの接続がタイムアウトしました。")
         return None
 
     except requests.ConnectionError as e:
@@ -43,17 +38,17 @@ def search_edinet_data(edinet_code):
 
         try:
             error_data = resp.json()
-            print(f"API response: {error_data}") 
+            print(f"API response: {error_data}")
         except ValueError:
             pass
         return None
 
-    except ValueError: 
-        print("エラー: EDINET DB APIのレスポンスをJSONとして解析できませんでした。") 
-        return None 
+    except ValueError:
+        print("エラー: EDINET DB APIのレスポンスをJSONとして解析できませんでした。")
+        return None
 
-    except requests.RequestException as e: 
-        print(f"エラー: EDINET DB API通信エラー: {e}") 
+    except requests.RequestException as e:
+        print(f"エラー: EDINET DB API通信エラー: {e}")
         return None
 
 
@@ -66,24 +61,14 @@ def search_edinet_doc_list_data(date_str):
         print("Error: EDINET FSA API key is empty")
         return None
 
-    HEADERS = {
-            "Ocp-Apim-Subscription-Key": EDINET_FSA_API_KEY
-    }
+    HEADERS = {"Ocp-Apim-Subscription-Key": EDINET_FSA_API_KEY}
 
     url = f"{EDINET_FSA_BASE_URL}/documents.json"
 
-    params = {
-            "date": date_str,
-            "type": 2
-    }
+    params = {"date": date_str, "type": 2}
 
     try:
-        resp = requests.get(
-                url,
-                params=params,
-                headers=HEADERS,
-                timeout=30
-        )
+        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
 
         resp.raise_for_status()
         return resp.json()

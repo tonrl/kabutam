@@ -1,10 +1,12 @@
-import tomllib
 import functools
-from platformdirs import user_config_dir
+import tomllib
 from pathlib import Path
-from kabutam.secrets.secretservice import SecretServiceBackend
-from kabutam.secrets.pass_backend import PassBackend
+
+from platformdirs import user_config_dir
+
 from kabutam.secrets.base import SecretBackend
+from kabutam.secrets.pass_backend import PassBackend
+from kabutam.secrets.secretservice import SecretServiceBackend
 
 APP_NAME = "kabutam"
 
@@ -44,9 +46,7 @@ def get_secret_backend() -> SecretBackend:
     if backend_name == "pass":
         pass_config = secrets_config.get("pass", {})
 
-        return PassBackend(
-            paths=pass_config.get("paths", DEFAULT_PASS_PATHS)
-        )
+        return PassBackend(paths=pass_config.get("paths", DEFAULT_PASS_PATHS))
 
     if backend_name == "secretservice":
         secretservice_config = secrets_config.get(
@@ -82,10 +82,10 @@ def get_edinet_api_key() -> str:
 def get_jquants_api_key() -> str:
     return get_secret("JPX_JQUANTS_API_KEY")
 
+
 @functools.lru_cache(maxsize=1)
 def get_edinet_fsa_api_key() -> str:
     return get_secret("EDINET_FSA_API_KEY")
-
 
 
 def get_color_scheme() -> str:

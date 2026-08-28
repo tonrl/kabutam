@@ -1,16 +1,16 @@
+import csv
 import sys
 import threading
-import time
-import csv
+
+from kabutam.animations.spinners import show_spinner
 from kabutam.db.portfolio import get_holdings
 from kabutam.db.schema import create_table_corp_data
-from kabutam.edinet.get_corpdata import get_corpdata
-from kabutam.stock.saveprice import ensure_recent_prices
-from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
-from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
+from kabutam.display.colors import colorise_profit
 from kabutam.display.terminal import fit_text
-from kabutam.display.colors import (colorise_profit)
-from kabutam.animations.spinners import show_spinner
+from kabutam.edinet.get_corpdata import get_corpdata
+from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
+from kabutam.stock.saveprice import ensure_recent_prices
+from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 
 # スタイルの定義
 RESET = "\033[0m"
@@ -19,6 +19,7 @@ DIM = "\033[2m"
 FG_BRIGHT_WHITE = "\033[97m"
 FG_CYAN = "\033[36m"
 FG_GRAY = "\033[90m"
+
 
 def get_portfolio_recent_edinet_documents(conn, codes, limit=8):
     """
@@ -35,6 +36,7 @@ def get_portfolio_recent_edinet_documents(conn, codes, limit=8):
         JOIN edinet_master T2 ON T1.EDINETCode = T2.EDINETCode
         LEFT JOIN equities_master T3 ON T2.Code = T3.Code
         WHERE T2.Code IN ({placeholders})
+            AND date(T1.submit_datetime) >= datetime('now', '-30 days')
         ORDER BY T1.submit_datetime DESC
         LIMIT ?
     """
@@ -43,6 +45,7 @@ def get_portfolio_recent_edinet_documents(conn, codes, limit=8):
 
     cursor = conn.execute(f"SELECT {query}", params)
     return cursor.fetchall()
+
 
 def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
     """
@@ -67,6 +70,7 @@ def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
         LEFT JOIN equities_master T3
             ON T1.sec_code = T3.Code
         WHERE T1.sec_code IN ({placeholders})
+            AND date(T1.disclosure_date) >= date('now', '-30 days')
         ORDER BY
             T1.disclosure_date DESC,
             T1.disclosure_time DESC
@@ -79,6 +83,7 @@ def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
 
     return cursor.fetchall()
 
+
 def show_portfolio_csv(conn):
 
     holdings = get_holdings(conn)
@@ -86,29 +91,29 @@ def show_portfolio_csv(conn):
     if not holdings:
         return
 
-    writer = csv.writer(sys.stdout,
-                        lineterminator="\n",
+    writer = csv.writer(
+        sys.stdout,
+        lineterminator="\n",
     )
 
-    writer.writerow([
-        "Code",
-        "Company",
-        "Account",
-        "Shares",
-        "AveragePrice",
-        "Price",
-        "Profit",
-        "Value",
-    ])
+    writer.writerow(
+        [
+            "Code",
+            "Company",
+            "Account",
+            "Shares",
+            "AveragePrice",
+            "Price",
+            "Profit",
+            "Value",
+        ]
+    )
 
     # 最新株価を取得
     latest_prices = {}
 
-    def on_price_event(message):
-        status_ref[0] = message
-
     for code in holdings:
-        prices = ensure_recent_prices(conn, code, 1, on_event=on_price_event)
+        prices = ensure_recent_prices(conn, code, 1, on_event=None)
 
         if prices:
             latest_prices[code] = prices[0][4]
@@ -116,44 +121,44 @@ def show_portfolio_csv(conn):
             latest_prices[code] = None
 
     for code, accounts in holdings.items():
-
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT CoName
             FROM equities_master
             WHERE Code = ?
-        """, (code,)).fetchone()
+        """,
+            (code,),
+        ).fetchone()
 
         name = row[0] if row else "不明"
 
         latest_price = latest_prices.get(code)
 
         for account_type, holding in accounts.items():
-
             shares = holding["shares"]
             average_price = holding["average_price"]
 
             if latest_price is not None:
-
                 value = shares * latest_price
-                profit = (
-                    latest_price - average_price
-                ) * shares
+                profit = (latest_price - average_price) * shares
 
             else:
-
                 value = None
                 profit = None
 
-            writer.writerow([
-                code,
-                name,
-                account_type,
-                shares,
-                average_price,
-                latest_price,
-                profit,
-                value,
-            ])
+            writer.writerow(
+                [
+                    code,
+                    name,
+                    account_type,
+                    shares,
+                    average_price,
+                    latest_price,
+                    profit,
+                    value,
+                ]
+            )
+
 
 # Show portfolio in terminal
 def show_portfolio(conn, mode="normal", sort_by="shares"):
@@ -165,8 +170,11 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
         return
 
     total_value = 0
-    total_previous_value = 0
     total_cost = 0
+    total_priced_cost = 0
+    total_previous_value = 0
+    total_daily_profit = 0
+    unpriced_count = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
 
@@ -182,7 +190,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     WIDTH_PROFIT = 16
     WIDTH_VALUE = 16
 
-    if (mode=="minimal"):
+    if mode == "minimal":
         WIDTH = (
             WIDTH_CODE
             + WIDTH_COMPANY
@@ -207,7 +215,9 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # 開示情報取得
     status_ref = [" 開示書類情報を同期しています"]
     stop_event = threading.Event()
-    spinner = threading.Thread(target=show_spinner, args=(stop_event, None, None, status_ref))
+    spinner = threading.Thread(
+        target=show_spinner, args=(stop_event, None, None, status_ref)
+    )
     spinner.start()
 
     try:
@@ -228,6 +238,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     current_ref = [0]
     status_ref = [None]
+
     def on_price_event(message):
         status_ref[0] = message
 
@@ -236,7 +247,12 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # print(f"保有銘柄 {total_codes}銘柄の株価を確認しています...")
     spinner = threading.Thread(
         target=show_spinner,
-        args=(stop_event, current_ref, total_codes, status_ref,),
+        args=(
+            stop_event,
+            current_ref,
+            total_codes,
+            status_ref,
+        ),
     )
 
     spinner.start()
@@ -253,7 +269,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 latest_prices[code] = prices[0][4]
 
                 # 前営業日
-                if len(prices) >=2:
+                if len(prices) >= 2:
                     previous_prices[code] = prices[1][4]
                 else:
                     previous_prices[code] = None
@@ -278,17 +294,25 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     stop_event = threading.Event()
     spinner = threading.Thread(
         target=show_spinner,
-        args=(stop_event, current_ref, total_codes, status_ref,),
+        args=(
+            stop_event,
+            current_ref,
+            total_codes,
+            status_ref,
+        ),
     )
 
     spinner.start()
     try:
         for code in codes:
-            edinet_row = conn.execute("""
+            edinet_row = conn.execute(
+                """
                 SELECT EDINETCode
                 FROM edinet_master
                 WHERE Code = ?
-            """, (code,)).fetchone()
+            """,
+                (code,),
+            ).fetchone()
 
             forecast_dividend = None
             if edinet_row and edinet_row[0]:
@@ -310,40 +334,33 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
         codes = sorted(
             holdings.keys(),
             key=lambda code: (
-                -sum(
-                    holding["shares"]
-                    for holding in holdings[code].values()
-                ),
+                -sum(holding["shares"] for holding in holdings[code].values()),
                 str(code),
-            )
+            ),
         )
     else:
-        codes = sorted(
-            holdings.keys(),
-            key=lambda code: str(code)
-        )
-    #--------------------------
+        codes = sorted(holdings.keys(), key=lambda code: str(code))
+    # --------------------------
     # Get Company names
-    #--------------------------
+    # --------------------------
     placeholders = ",".join("?" for _ in codes)
     rows = conn.execute(
-            f"""
+        f"""
             SELECT Code, CoName
             FROM equities_master
             WHERE Code IN ({placeholders})
             """,
-            codes,
+        codes,
     ).fetchall()
     company_names = dict(rows)
 
-    #-----------------------------------------------------
+    # -----------------------------------------------------
 
-    if (mode == "normal" or mode =="minimal"):
-
+    if mode == "normal" or mode == "minimal":
         print("=" * WIDTH)
         print("ポートフォリオ")
         print("=" * WIDTH)
-        if (mode=="minimal"):
+        if mode == "minimal":
             print(
                 f"{'Code':<{WIDTH_CODE}}"
                 f"{fit_text('Company', WIDTH_COMPANY)}"
@@ -368,7 +385,6 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
         print("-" * WIDTH)
 
- 
         for code in codes:
             # info
             accounts = holdings[code]
@@ -387,7 +403,6 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
             # --------------------------------------------------
 
             for account_type, holding in accounts.items():
-
                 shares = holding["shares"]
                 average_price = holding["average_price"]
 
@@ -397,15 +412,18 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 if latest_price is not None:
                     value = shares * latest_price
                     total_value += value
+                    total_priced_cost += cost
+
+                    profit = (latest_price - average_price) * shares
 
                     # 前営業日の保有株評価額
                     if previous_price is not None:
-                        previous_value = shares * previous_price
-                        total_previous_value += previous_value
-
-                    profit = (latest_price - average_price) * shares
-                    if previous_price is not None:
                         daily_profit = (latest_price - previous_price) * shares
+                        total_daily_profit += daily_profit
+                        total_previous_value += shares * previous_price
+                        # previous_value = shares * previous_price
+                        # total_previous_value += previous_value
+                    # profit = (latest_price - average_price) * shares
                     else:
                         daily_profit = None
 
@@ -417,8 +435,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                         daily_profit_text = f"{daily_profit:+,.0f}"
                         daily_profit_text = f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
                         daily_profit_text = colorise_profit(
-                                daily_profit,
-                                daily_profit_text
+                            daily_profit, daily_profit_text
                         )
                     else:
                         daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
@@ -427,6 +444,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                     value = None
                     profit = None
                     daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
+                    unpriced_count += 1
 
                 # 配当金・税金計算
                 if forecast_dividend is not None:
@@ -438,33 +456,31 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                     total_dividend_pre_tax += div_pre_tax
                     total_dividend_post_tax += div_post_tax
 
-
                 if value is not None:
-                    if (mode == "minimal"):
+                    if mode == "minimal":
                         print(
-                                f"{code:<{WIDTH_CODE}}"
-                                f"{company}"
-                                f"{fit_text(account_type, WIDTH_ACCOUNT)}"
-                                f"{shares:>{WIDTH_SHARES},}"
-                                f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
-                                f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
-                                f"{latest_price:>{WIDTH_PRICE},.2f}"
+                            f"{code:<{WIDTH_CODE}}"
+                            f"{company}"
+                            f"{fit_text(account_type, WIDTH_ACCOUNT)}"
+                            f"{shares:>{WIDTH_SHARES},}"
+                            f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
+                            f"{latest_price:>{WIDTH_PRICE},.2f}"
                         )
                     else:
                         print(
-                                f"{code:<{WIDTH_CODE}}"
-                                f"{company}"
-                                f"{fit_text(account_type, WIDTH_ACCOUNT)}"
-                                f"{shares:>{WIDTH_SHARES},}"
-                                f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
-                                f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
-                                f"{latest_price:>{WIDTH_PRICE},.2f}"
-                                f"{profit_text:>{WIDTH_PROFIT}}"
-                                f"{value:>{WIDTH_VALUE},.0f}"
+                            f"{code:<{WIDTH_CODE}}"
+                            f"{company}"
+                            f"{fit_text(account_type, WIDTH_ACCOUNT)}"
+                            f"{shares:>{WIDTH_SHARES},}"
+                            f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
+                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
+                            f"{latest_price:>{WIDTH_PRICE},.2f}"
+                            f"{profit_text:>{WIDTH_PROFIT}}"
+                            f"{value:>{WIDTH_VALUE},.0f}"
                         )
 
                 else:
-
                     print(
                         f"{code:<{WIDTH_CODE}}"
                         f"{company}"
@@ -482,50 +498,40 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # --------------------------------------------------
     # 集計
     # --------------------------------------------------
-    if (mode=="normal" or mode=="minimal"):
-
-        profit = total_value - total_cost
-        daily_profit = total_value - total_previous_value
+    if mode == "normal" or mode == "minimal":
+        # profit = total_value - total_cost
+        # daily_profit = total_value - total_previous_value
+        profit = total_value - total_priced_cost
+        daily_profit = total_daily_profit
 
         print(f"取得総額       : {total_cost:,.0f} 円")
         print(f"保有資産額     : {total_value:,.0f} 円")
-        # print(f"評価損益       : {profit:+,.0f} 円")
+        if unpriced_count:
+            print(
+                f"{FG_GRAY}※ 株価未取得: {unpriced_count} 件 (保有資産から除外){RESET}"
+            )
+
         print(
             "前営業日比     : "
-            + colorise_profit(
-                daily_profit,
-                f"{daily_profit:+,.0f} 円"
-            )
+            + colorise_profit(daily_profit, f"{daily_profit:+,.0f} 円")
         )
 
         if total_previous_value > 0:
-            daily_profit_rate = (
-                daily_profit / total_previous_value
-            ) * 100
+            daily_profit_rate = (daily_profit / total_previous_value) * 100
 
             print(
                 "前営業日比率   : "
-                + colorise_profit(
-                    daily_profit_rate,
-                    f"{daily_profit_rate:+.2f}%"
-                )
+                + colorise_profit(daily_profit_rate, f"{daily_profit_rate:+.2f}%")
             )
 
-        print(
-                "評価損益       : "+ colorise_profit(
-                    profit,
-                    f"{profit:+,.0f} 円"
-                )
-        )
+        print("評価損益       : " + colorise_profit(profit, f"{profit:+,.0f} 円"))
 
         if total_cost > 0:
-            profit_rate = profit / total_cost * 100
+            # profit_rate = profit / total_cost * 100
+            profit_rate = profit / total_priced_cost * 100
             print(
-                    "評価損益率     : "
-                    + colorise_profit(
-                        profit_rate,
-                        f"{profit_rate:+.2f}%"
-                    )
+                "評価損益率     : "
+                + colorise_profit(profit_rate, f"{profit_rate:+.2f}%")
             )
 
         print("=" * WIDTH)
@@ -541,33 +547,39 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
             print(f"配当利回り（評価額ベース）: {yield_on_value:.2f}%")
 
     # ── 既存の配当金などの表示が終わったあとに追加 ──
-    if (mode == "documents"):
-        DOC_LIMIT=10
-        TDNET_DOC_LIMIT=10
-    elif (mode =="tdnet"):
-        DOC_LIMIT=0
-        TDNET_DOC_LIMIT=20
-    elif (mode =="edinet"):
-        DOC_LIMIT=20
-        TDNET_DOC_LIMIT=0
+    if mode == "documents":
+        DOC_LIMIT = 10
+        TDNET_DOC_LIMIT = 10
+    elif mode == "tdnet":
+        DOC_LIMIT = 0
+        TDNET_DOC_LIMIT = 20
+    elif mode == "edinet":
+        DOC_LIMIT = 20
+        TDNET_DOC_LIMIT = 0
     else:
-        DOC_LIMIT=3
-        TDNET_DOC_LIMIT=3
+        DOC_LIMIT = 4
+        TDNET_DOC_LIMIT = 4
 
-
-    if (mode == "normal" or mode == "documents" or mode == "edinet"):
-
+    if mode == "normal" or mode == "documents" or mode == "edinet":
         print("=" * WIDTH)
         print(f"   保有銘柄の直近のEDINET開示書類 (上位{DOC_LIMIT}件)")
         print("-" * WIDTH)
 
         # 保有銘柄全体のコードリストを使って直近10件を取得
-        recent_portfolio_edinet_docs = get_portfolio_recent_edinet_documents(conn, codes, limit=DOC_LIMIT)
+        recent_portfolio_edinet_docs = get_portfolio_recent_edinet_documents(
+            conn, codes, limit=DOC_LIMIT
+        )
 
         if not recent_portfolio_edinet_docs:
             print("  直近の開示書類はありません。")
         else:
-            for idx, (doc_id, description, submit_dt, stock_code, company_name) in enumerate(recent_portfolio_edinet_docs, 1):
+            for idx, (
+                doc_id,
+                description,
+                submit_dt,
+                stock_code,
+                company_name,
+            ) in enumerate(recent_portfolio_edinet_docs, 1):
                 url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
                 styled_url = f"{FG_CYAN}{url}{RESET}"
@@ -576,9 +588,10 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 print(f"      {description}")
                 print(f"     {styled_url}")
 
-
-    if (mode == "normal" or mode == "documents" or mode == "tdnet"):
-        recent_portfolio_tdnet_docs = get_portfolio_recent_tdnet_documents(conn, codes, limit=TDNET_DOC_LIMIT)
+    if mode == "normal" or mode == "documents" or mode == "tdnet":
+        recent_portfolio_tdnet_docs = get_portfolio_recent_tdnet_documents(
+            conn, codes, limit=TDNET_DOC_LIMIT
+        )
         print("-" * WIDTH)
         print(f"   保有銘柄の直近のTDNET開示書類 (上位{TDNET_DOC_LIMIT}件)")
         print("-" * WIDTH)
@@ -586,20 +599,24 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
         if not recent_portfolio_tdnet_docs:
             print("  直近の開示書類はありません。")
         else:
-            for idx, (disclosure_id, disclosure_date, disclosure_time, sec_code, title, pdf_url) in enumerate(recent_portfolio_tdnet_docs, 1):
-
+            for idx, (
+                disclosure_id,
+                disclosure_date,
+                disclosure_time,
+                sec_code,
+                title,
+                pdf_url,
+            ) in enumerate(recent_portfolio_tdnet_docs, 1):
                 company_name = company_names.get(sec_code, "不明")
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
                 url = pdf_url
-                hyperlink = (
-                    f"\033]8;;{url}\033\\"
-                    f"{url}"
-                    f"\033]8;;\033\\"
-                )
+                hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
 
                 styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
 
-                print(f"[{idx:2d}] {sec_code} {styled_company} | {disclosure_date} {disclosure_time}")
+                print(
+                    f"[{idx:2d}] {sec_code} {styled_company} | {disclosure_date} {disclosure_time}"
+                )
                 print(f"      {title}")
                 print(f"   {styled_url}")
     print("=" * WIDTH)
