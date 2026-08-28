@@ -15,9 +15,29 @@ from kabutam.display.showlist import show_list
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 
-# CHECK_INTERVAL = timedelta(days=7)
-
 JST = ZoneInfo("Asia/Tokyo")
+
+
+class KabutamHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __init__(self, prog, **kwargs):
+        super().__init__(
+            prog,
+            max_help_position=35,
+            width=120,
+            **kwargs,
+        )
+
+
+def get_version_message():
+    return (
+        f"\n __  __  _____  __  __   Kabutam v{version('kabutam')}\n"
+        "|  |/  /|_   _||  \\/  |  Copyright (C) 2026 Tonrl\n"
+        "|__|\\__\\  |_|  |_|\\/|_| \n"
+        "                         License GPLv3+: GNU GPL version 3 or later\n"
+        "                         <https://gnu.org/licenses/gpl.html>\n"
+    )
+
+
 # ------------------------------------------------------------
 # 業種
 # ------------------------------------------------------------
@@ -153,6 +173,16 @@ def init_db_data():
         return False
 
 
+class KabutamHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __init__(self, prog, **kwargs):
+        super().__init__(
+            prog,
+            max_help_position=35,
+            width=120,
+            **kwargs,
+        )
+
+
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
@@ -162,10 +192,9 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="Kabutam 日本株検索 PF管理",
-        formatter_class=lambda prog: argparse.HelpFormatter(
-            prog, max_help_position=35, width=120
-        ),
+        formatter_class=KabutamHelpFormatter,
     )
+    parser.version = get_version_message()
     trade = parser.add_mutually_exclusive_group()
     portfolio_format = parser.add_mutually_exclusive_group()
 
@@ -180,12 +209,6 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version=(
-            f"%(prog)s {version('kabutam')}\n"
-            "Copyright (C) 2026 Tonrl\n"
-            "License GPLv3+: GNU GPL version 3 or later\n"
-            "<https://gnu.org/licenses/gpl.html>"
-        ),
     )
 
     parser.add_argument("-C", "--code", help="銘柄コード")
@@ -203,7 +226,7 @@ def main():
         "--market",
         "--mk",
         choices=MARKET_MAP.keys(),
-        metavar="{prime,standard,...}",
+        metavar="MARKET",
         help="市場",
     )
 
