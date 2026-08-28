@@ -519,10 +519,9 @@ def main():
 
     # --------------------------------------------------------
     # オプションなし
-    # → 日本取引所グループ
     # --------------------------------------------------------
-
-    show_stock(conn, "86970", mode="normal")
+    parser.error("no operation specified (use -h for help)")
+    # show_stock(conn, "86970", mode="normal")
     conn.close()
 
 
