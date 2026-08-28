@@ -12,12 +12,12 @@ def test_add_buy():
     conn = sqlite3.connect(":memory:")
     try:
         add_buy(
-                conn,
-                code="72030",
-                account_type="tokutei",
-                shares=100,
-                price=2500,
-                date="2026-08-20",
+            conn,
+            code="72030",
+            account_type="tokutei",
+            shares=100,
+            price=2500,
+            date="2026-08-20",
         )
 
         rows = get_transactions(conn)
@@ -110,6 +110,7 @@ def test_get_holdings_after_sell():
     finally:
         conn.close()
 
+
 def test_get_holdings_after_full_sell():
     conn = sqlite3.connect(":memory:")
     try:
@@ -137,6 +138,7 @@ def test_get_holdings_after_full_sell():
 
     finally:
         conn.close()
+
 
 def test_get_holdings_after_multiple_buys():
     conn = sqlite3.connect(":memory:")
@@ -167,6 +169,7 @@ def test_get_holdings_after_multiple_buys():
 
     finally:
         conn.close()
+
 
 def test_get_holdings_separate_account_types():
     conn = sqlite3.connect(":memory:")
