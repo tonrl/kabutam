@@ -37,7 +37,7 @@ def should_sync_edinet_data(conn, target_date, interval_hours=3):
         return True
 
     try:
-        last_checked = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S").replace(
+        last_checked = datetime.strptime(last_checked_at, "%Y-%m-%d %H:%M:%S").replace(
             tzinfo=UTC
         )
     except ValueError:
@@ -109,8 +109,8 @@ def sync_recent_edinet_doc_list(
             document_count=len(documents),
             completed=not is_recent,
         )
-    if index < len(target_dates) - 1:
-        time_tool.sleep(REQUEST_INTERVAL)
+        if index < len(target_dates) - 1:
+            time_tool.sleep(REQUEST_INTERVAL)
 
     cleanup_edinet_sync_status(conn, keep_days=EDINET_SYNC_STATUS_RETENTION_DAYS)
     if message_ref is not None:

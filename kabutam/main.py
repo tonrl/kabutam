@@ -183,7 +183,7 @@ def main():
         version=(
             f"%(prog)s {version('kabutam')}\n"
             "Copyright (C) 2026 Tonrl\n"
-            "License GPLv3+: GNU GPL version 3 or later"
+            "License GPLv3+: GNU GPL version 3 or later\n"
             "<https://gnu.org/licenses/gpl.html>"
         ),
     )
