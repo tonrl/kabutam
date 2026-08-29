@@ -7,7 +7,7 @@ def test_get_holdings_average_price():
     with sqlite3.connect(":memory:") as conn:
         add_buy(
             conn,
-            code="7203",
+            code="72030",
             account_type="tokutei",
             shares=100,
             price=2000,
@@ -16,7 +16,7 @@ def test_get_holdings_average_price():
 
         add_buy(
             conn,
-            code="7203",
+            code="72030",
             account_type="tokutei",
             shares=100,
             price=3000,
@@ -25,7 +25,7 @@ def test_get_holdings_average_price():
 
         holdings = get_holdings(conn)
 
-        holding = holdings["7203"]["tokutei"]
+        holding = holdings["72030"]["tokutei"]
 
         assert holding["shares"] == 200
         assert holding["cost"] == 500000

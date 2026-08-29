@@ -99,6 +99,18 @@ def create_table_portfolio(conn):
     conn.commit()
 
 
+def create_table_watchlist(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchlist (
+            Code TEXT PRIMARY KEY,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
+
+
 def create_table_edinet_doc_list(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS edinet_doc_list (

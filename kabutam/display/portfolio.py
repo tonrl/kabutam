@@ -475,7 +475,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                             f"{shares:>{WIDTH_SHARES},}"
                             f"{average_price:>{WIDTH_AVG_PRICE},.2f}"
                             f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
-                            f"{latest_price:>{WIDTH_PRICE},.2f}"
+                            f"{latest_price:>{WIDTH_PRICE},.1f}"
                             f"{profit_text:>{WIDTH_PROFIT}}"
                             f"{value:>{WIDTH_VALUE},.0f}"
                         )

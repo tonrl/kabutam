@@ -74,15 +74,15 @@ def search_edinet_doc_list_data(date_str):
         return resp.json()
 
     except requests.Timeout:
-        print("エラー: EDINET FSA APIへの接続がタイムアウトしました。")
+        print("\nエラー: EDINET FSA APIへの接続がタイムアウトしました。")
         return None
 
     except requests.ConnectionError as e:
-        print(f"エラー: EDINET FSA APIへ接続できませんでした: {e}")
+        print(f"\nエラー: EDINET FSA APIへ接続できませんでした: {e}")
         return None
 
     except requests.HTTPError as e:
-        print(f"エラー: EDINET FSA APIがHTTPエラーを返しました: {e}")
+        print(f"\nエラー: EDINET FSA APIがHTTPエラーを返しました: {e}")
 
         try:
             error_data = resp.json()
@@ -92,9 +92,9 @@ def search_edinet_doc_list_data(date_str):
         return None
 
     except ValueError:
-        print("エラー: EDINET FSA APIのレスポンスをJSONとして解析できませんでした。")
+        print("\nエラー: EDINET FSA APIのレスポンスをJSONとして解析できませんでした。")
         return None
 
     except requests.RequestException as e:
-        print(f"エラー: EDINET FSA API通信エラー: {e}")
+        print(f"\nエラー: EDINET FSA API通信エラー: {e}")
         return None

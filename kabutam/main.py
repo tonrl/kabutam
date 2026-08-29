@@ -9,9 +9,11 @@ import argcomplete
 
 from kabutam.db.connection import get_connection, require_master_data
 from kabutam.db.portfolio import add_buy, add_sell, add_split
+from kabutam.db.watchlist import add_watchlist, remove_watchlist
 from kabutam.display.portfolio import show_portfolio, show_portfolio_csv
 from kabutam.display.showinfo import show_stock
 from kabutam.display.showlist import show_list
+from kabutam.display.watchlist import show_watchlist
 from kabutam.setup.fetch_edinet import fetch_and_save_edinet
 from kabutam.setup.fetch_jquants import fetch_and_save_jquants
 
@@ -173,16 +175,6 @@ def init_db_data():
         return False
 
 
-class KabutamHelpFormatter(argparse.RawDescriptionHelpFormatter):
-    def __init__(self, prog, **kwargs):
-        super().__init__(
-            prog,
-            max_help_position=35,
-            width=120,
-            **kwargs,
-        )
-
-
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
@@ -197,6 +189,7 @@ def main():
     parser.version = get_version_message()
     trade = parser.add_mutually_exclusive_group()
     portfolio_format = parser.add_mutually_exclusive_group()
+    watchlists = parser.add_mutually_exclusive_group()
 
     parser.add_argument(
         "--license", action="store_true", help="ライセンス情報を表示して終了する"
@@ -237,6 +230,27 @@ def main():
         # metavar="{機械...}",
         metavar="SECTOR",
         help="33業種名",
+    )
+    parser.add_argument(
+        "--watchlist",
+        "--watch",
+        action="store_true",
+        dest="watchlist",
+        help="ウォッチリスト表示",
+    )
+
+    watchlists.add_argument(
+        "--add",
+        type=str,
+        metavar="CODE",
+        help="ウォッチリスト銘柄追加",
+    )
+
+    watchlists.add_argument(
+        "--remove",
+        type=str,
+        metavar="CODE",
+        help="ウォッチリスト銘柄削除",
     )
 
     parser.add_argument(
@@ -444,6 +458,58 @@ def main():
 
         conn.close()
         return
+
+    # --------------------------------------------------
+    # ウォッチリスト操作
+    # --------------------------------------------------
+
+    if args.watchlist:
+        # ----------------------------------------------
+        # 追加
+        # ----------------------------------------------
+        if args.add is not None:
+            code = args.add.strip()
+
+            if not code:
+                parser.error("銘柄コードを指定してください")
+
+            result = add_watchlist(conn, code)
+
+            if result:
+                print(f"{code} をウォッチリストに追加しました。")
+            else:
+                parser.error(f"銘柄コード {code} は銘柄リストに存在しません")
+
+            conn.close()
+            return
+
+        # ----------------------------------------------
+        # 削除
+        # ----------------------------------------------
+        elif args.remove is not None:
+            code = args.remove.strip()
+
+            if not code:
+                parser.error("銘柄コードを指定してください")
+
+            result = remove_watchlist(conn, code)
+
+            if result:
+                print(f"{code} をウォッチリストから削除しました。")
+            else:
+                print(f"{code} はウォッチリストに登録されていません。")
+
+            conn.close()
+            return
+        else:
+            # ----------------------------------------------
+            # 表示
+            # ----------------------------------------------
+            show_watchlist(conn)
+
+            conn.close()
+            return
+
     # --------------------------------------------------------
     # 銘柄コード
     # --------------------------------------------------------
