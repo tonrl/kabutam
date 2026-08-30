@@ -246,7 +246,7 @@ def test_ensure_recent_prices_does_not_update_when_latest():
         result = ensure_recent_prices(
             conn,
             "72030",
-            days=3,
+            days=1,
         )
 
     mock_update.assert_not_called()
