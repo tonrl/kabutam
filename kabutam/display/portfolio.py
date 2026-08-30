@@ -9,9 +9,11 @@ from kabutam.display.colors import colorise_profit
 from kabutam.display.terminal import fit_text
 from kabutam.edinet.get_corpdata import get_corpdata
 from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
-from kabutam.stock.saveprice import ensure_recent_prices
+from kabutam.stock.saveprice import ensure_recent_prices, ensure_recent_prices_bulk
 from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 
+DISPLAY_DAYS = 2
+MAX_SECTORS = 6
 # スタイルの定義
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -82,6 +84,261 @@ def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
     cursor = conn.execute(query, params)
 
     return cursor.fetchall()
+
+
+def get_portfolio_sector_allocation(conn, holdings, latest_prices, previous_prices):
+    """
+    ポートフォリオの33業種別構成比を取得する。
+
+    """
+    sector_data = {}
+
+    for code, accounts in holdings.items():
+        latest_price = latest_prices.get(code)
+        previous_price = previous_prices.get(code)
+
+        if latest_price is None:
+            continue
+
+        row = conn.execute(
+            """
+            SELECT S33Nm
+            FROM equities_master
+            WHERE Code = ?
+            """,
+            (code,),
+        ).fetchone()
+
+        sector_name = row[0] if row and row[0] else "業種不明"
+        shares = sum(holding["shares"] for holding in accounts.values())
+        value = shares * latest_price
+        profit = sum(
+            (latest_price - holding["average_price"]) * holding["shares"]
+            for holding in accounts.values()
+        )
+
+        # 前日比
+        daily_profit = None
+
+        if previous_price is not None:
+            daily_profit = (latest_price - previous_price) * shares
+
+        if sector_name not in sector_data:
+            sector_data[sector_name] = {
+                "value": 0,
+                "profit": 0,
+                "daily_profit": 0,
+                "has_daily_profit": False,
+            }
+
+        sector_data[sector_name]["value"] += value
+        sector_data[sector_name]["profit"] += profit
+
+        if daily_profit is not None:
+            sector_data[sector_name]["daily_profit"] += daily_profit
+            sector_data[sector_name]["has_daily_profit"] = True
+
+    total_value = sum(data["value"] for data in sector_data.values())
+    if total_value <= 0:
+        return []
+
+    allocation = []
+
+    for sector, data in sector_data.items():
+        weight = data["value"] / total_value * 100
+
+        allocation.append(
+            (
+                sector,
+                data["value"],
+                weight,
+                data["profit"],
+                data["daily_profit"],
+                data["has_daily_profit"],
+            )
+        )
+    allocation.sort(key=lambda x: x[1], reverse=True)
+
+    return allocation
+
+
+def print_portfolio_summary(
+    total_cost,
+    total_value,
+    total_priced_cost,
+    total_previous_value,
+    total_daily_profit,
+    total_dividend_pre_tax,
+    total_dividend_post_tax,
+    unpriced_count,
+):
+    # -------------損益-----------------------
+    unrealised_profit = total_value - total_priced_cost
+    daily_profit = total_daily_profit
+
+    # -------------損益率---------------------
+    daily_profit_rate = (
+        daily_profit / total_previous_value * 100 if total_previous_value > 0 else None
+    )
+
+    unrealised_profit_rate = (
+        unrealised_profit / total_priced_cost * 100 if total_priced_cost > 0 else None
+    )
+
+    # -------------配当利回り-----------------
+    yield_on_cost = (
+        total_dividend_pre_tax / total_cost * 100 if total_cost > 0 else None
+    )
+
+    yield_on_value = (
+        total_dividend_pre_tax / total_value * 100 if total_value > 0 else None
+    )
+
+    # ------------------------------------------
+    # 表示用文字列作成
+    # ------------------------------------------
+
+    daily_pl_text = colorise_profit(
+        daily_profit,
+        f"{daily_profit:+,.0f} 円",
+    )
+
+    daily_pl_rate_text = (
+        colorise_profit(
+            daily_profit_rate,
+            f"{daily_profit_rate:+.2f}%",
+        )
+        if daily_profit_rate is not None
+        else "-"
+    )
+
+    unrealised_pl_text = colorise_profit(
+        unrealised_profit,
+        f"{unrealised_profit:+,.0f} 円",
+    )
+
+    unrealised_pl_rate_text = (
+        colorise_profit(
+            unrealised_profit_rate,
+            f"{unrealised_profit_rate:+.2f}%",
+        )
+        if unrealised_profit_rate is not None
+        else "-"
+    )
+
+    yield_on_cost_text = f"{yield_on_cost:.2f}%" if yield_on_cost is not None else "-"
+
+    yield_on_value_text = (
+        f"{yield_on_value:.2f}%" if yield_on_value is not None else "-"
+    )
+
+    # ------------------------------------------
+    # 表示
+    # ------------------------------------------
+
+    print(f"取得総額          : {total_cost:,.0f} 円")
+    print(f"保有資産額        : {total_value:,.0f} 円")
+    if unpriced_count:
+        print(f"{FG_GRAY}※ 株価未取得: {unpriced_count} 件 (保有資産から除外){RESET}")
+    print(f"前営業日比        : {daily_pl_text} ({daily_pl_rate_text})")
+
+    print(f"評価損益          : {unrealised_pl_text} ({unrealised_pl_rate_text})")
+
+    print(
+        f"年間配当（税引前）: {total_dividend_pre_tax:,.0f} 円 "
+        f"[{yield_on_cost_text} / 取得額"
+        f"・{yield_on_value_text} / 評価額]"
+    )
+    print(f"年間配当（税引後）: {total_dividend_post_tax:,.0f} 円")
+
+
+def print_sector_allocation(conn, holdings, latest_prices, previous_prices, width=60):
+    allocation = get_portfolio_sector_allocation(
+        conn,
+        holdings,
+        latest_prices,
+        previous_prices,
+    )
+
+    if not allocation:
+        return
+
+    sector_count = len(allocation)
+    stock_count = len(holdings)
+
+    if len(allocation) > MAX_SECTORS:
+        visible = allocation[:MAX_SECTORS]
+        others = allocation[MAX_SECTORS:]
+
+        other_value = sum(item[1] for item in others)
+        total_value = sum(item[1] for item in allocation)
+
+        other_profit = sum(item[3] for item in others)
+        other_daily_profit = sum(item[4] for item in others)
+
+        other_has_daily_profit = any(item[5] for item in others)
+
+        other_weight = other_value / total_value * 100 if total_value > 0 else 0
+        allocation = visible + [
+            (
+                "その他",
+                other_value,
+                other_weight,
+                other_profit,
+                other_daily_profit,
+                other_has_daily_profit,
+            )
+        ]
+
+    SEC_WIDTH = 10
+    VALUE_WIDTH = 14
+    DAILY_WIDTH = 14
+    PROFIT_WIDTH = 14
+    SECTOR_WIDTH = 15
+    BAR_WIDTH = 32
+
+    print("-" * width)
+    print(f"{'セクター構成':<{SECTOR_WIDTH}}[{sector_count}業種 / {stock_count}銘柄]")
+    print("-" * width)
+    print(
+        f"{fit_text('業種', SECTOR_WIDTH)} "
+        f"{'構成':<{BAR_WIDTH}}"
+        f"{'比率':>{SEC_WIDTH - 3}}"
+        f"{'評価額':>{VALUE_WIDTH}}"
+        f"{'Daily P/L':>{DAILY_WIDTH}}"
+        f"{'P/L':>{PROFIT_WIDTH}}"
+    )
+    print("-" * width)
+    for sector, value, weight, profit, daily_profit, has_daily_profit in allocation:
+        bar_length = round(weight / 100 * BAR_WIDTH)
+
+        bar = "█" * bar_length
+
+        profit_raw = f"{profit:+,.0f}"
+        profit_padded = f"{profit_raw:>{PROFIT_WIDTH}}"
+        profit_text = colorise_profit(profit, profit_padded)
+
+        if has_daily_profit:
+            daily_raw = f"{daily_profit:+,.0f}"
+            daily_padded = f"{daily_raw:>{DAILY_WIDTH}}"
+            daily_profit_text = colorise_profit(
+                daily_profit,
+                daily_padded,
+            )
+
+        else:
+            daily_profit_text = f"{'-':>{DAILY_WIDTH}}"
+
+        value_text = f"{value:>{VALUE_WIDTH},.0f}"
+
+        print(
+            f"{fit_text(sector, SECTOR_WIDTH)} "
+            f"{bar:<{BAR_WIDTH}}"
+            f"{weight:>{SEC_WIDTH}.1f}%"
+            f"{value_text} 円"
+            f"{daily_profit_text} "
+            f"{profit_text}"
+        )
 
 
 def show_portfolio_csv(conn):
@@ -238,11 +495,10 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     current_ref = [0]
     status_ref = [None]
+    stop_event = threading.Event()
 
     def on_price_event(message):
         status_ref[0] = message
-
-    stop_event = threading.Event()
 
     # print(f"保有銘柄 {total_codes}銘柄の株価を確認しています...")
     spinner = threading.Thread(
@@ -256,31 +512,30 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     )
 
     spinner.start()
-
     try:
-        for code in holdings:
-            # 前のイベント表示をクリア
-            status_ref[0] = " 株価情報を更新しています"
-            # 株価の取得
-            prices = ensure_recent_prices(conn, code, 2, on_event=on_price_event)
-
-            if prices:
-                # 最新営業日
-                latest_prices[code] = prices[0][4]
-
-                # 前営業日
-                if len(prices) >= 2:
-                    previous_prices[code] = prices[1][4]
-                else:
-                    previous_prices[code] = None
-            else:
-                latest_prices[code] = None
-                previous_prices[code] = None
-
-            current_ref[0] += 1
+        price_data = ensure_recent_prices_bulk(
+            conn,
+            codes,
+            days=DISPLAY_DAYS,
+            on_event=on_price_event,
+        )
     finally:
         stop_event.set()
         spinner.join()
+
+    for code in codes:
+        prices = price_data.get(str(code), [])
+
+        if prices:
+            latest_prices[code] = prices[0][4]
+
+            if len(prices) >= 2:
+                previous_prices[code] = prices[1][4]
+            else:
+                previous_prices[code] = None
+        else:
+            latest_prices[code] = None
+            previous_prices[code] = None
 
     # --------------------------------------------------
     # 表示前に全銘柄の配当情報（EDINETデータ）を取得
@@ -498,53 +753,26 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # --------------------------------------------------
     # 集計
     # --------------------------------------------------
-    if mode == "normal" or mode == "minimal":
-        # profit = total_value - total_cost
-        # daily_profit = total_value - total_previous_value
-        profit = total_value - total_priced_cost
-        daily_profit = total_daily_profit
-
-        print(f"取得総額       : {total_cost:,.0f} 円")
-        print(f"保有資産額     : {total_value:,.0f} 円")
-        if unpriced_count:
-            print(
-                f"{FG_GRAY}※ 株価未取得: {unpriced_count} 件 (保有資産から除外){RESET}"
-            )
-
-        print(
-            "前営業日比     : "
-            + colorise_profit(daily_profit, f"{daily_profit:+,.0f} 円")
+    if mode in ("normal", "minimal"):
+        print_portfolio_summary(
+            total_cost=total_cost,
+            total_value=total_value,
+            total_priced_cost=total_priced_cost,
+            total_previous_value=total_previous_value,
+            total_daily_profit=total_daily_profit,
+            total_dividend_pre_tax=total_dividend_pre_tax,
+            total_dividend_post_tax=total_dividend_post_tax,
+            unpriced_count=unpriced_count,
         )
 
-        if total_previous_value > 0:
-            daily_profit_rate = (daily_profit / total_previous_value) * 100
-
-            print(
-                "前営業日比率   : "
-                + colorise_profit(daily_profit_rate, f"{daily_profit_rate:+.2f}%")
+        if mode != "minimal":
+            print_sector_allocation(
+                conn,
+                holdings,
+                latest_prices,
+                previous_prices,
+                width=WIDTH,
             )
-
-        print("評価損益       : " + colorise_profit(profit, f"{profit:+,.0f} 円"))
-
-        if total_cost > 0:
-            # profit_rate = profit / total_cost * 100
-            profit_rate = profit / total_priced_cost * 100
-            print(
-                "評価損益率     : "
-                + colorise_profit(profit_rate, f"{profit_rate:+.2f}%")
-            )
-
-        print("=" * WIDTH)
-        print(f"年間配当金（税引前）: {total_dividend_pre_tax:,.0f} 円")
-        print(f"年間配当金（税引後）: {total_dividend_post_tax:,.0f} 円")
-
-        if total_cost > 0:
-            yield_on_cost = (total_dividend_pre_tax / total_cost) * 100
-            print(f"配当利回り（取得額ベース）: {yield_on_cost:.2f}%")
-
-        if total_value > 0:
-            yield_on_value = (total_dividend_pre_tax / total_value) * 100
-            print(f"配当利回り（評価額ベース）: {yield_on_value:.2f}%")
 
     # ── 既存の配当金などの表示が終わったあとに追加 ──
     if mode == "documents":
@@ -560,15 +788,15 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
         DOC_LIMIT = 4
         TDNET_DOC_LIMIT = 4
 
-    if mode == "normal" or mode == "documents" or mode == "edinet":
-        print("=" * WIDTH)
-        print(f"   保有銘柄の直近のEDINET開示書類 (上位{DOC_LIMIT}件)")
-        print("-" * WIDTH)
-
+    if mode in ("normal", "documents", "edinet"):
         # 保有銘柄全体のコードリストを使って直近10件を取得
         recent_portfolio_edinet_docs = get_portfolio_recent_edinet_documents(
             conn, codes, limit=DOC_LIMIT
         )
+        total_docs = len(recent_portfolio_edinet_docs)
+        print("=" * WIDTH)
+        print(f"   保有銘柄の直近のEDINET開示書類 (上位{total_docs}件)")
+        print("-" * WIDTH)
 
         if not recent_portfolio_edinet_docs:
             print("  直近の開示書類はありません。")
@@ -583,17 +811,20 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
                 styled_url = f"{FG_CYAN}{url}{RESET}"
+                prefix = "  └─" if idx == total_docs else "  ├─"
+                indent = "     " if idx == total_docs else "  │  "
 
-                print(f"[{idx:2d}] {stock_code} {styled_company} | {submit_dt}")
-                print(f"      {description}")
-                print(f"     {styled_url}")
+                print(f"{prefix} [{stock_code}] {styled_company} | {submit_dt}")
+                print(f"{indent} {description}")
+                print(f"{indent} {styled_url}")
 
-    if mode == "normal" or mode == "documents" or mode == "tdnet":
+    if mode in ("normal", "documents", "tdnet"):
         recent_portfolio_tdnet_docs = get_portfolio_recent_tdnet_documents(
             conn, codes, limit=TDNET_DOC_LIMIT
         )
+        total_docs = len(recent_portfolio_tdnet_docs)
         print("-" * WIDTH)
-        print(f"   保有銘柄の直近のTDNET開示書類 (上位{TDNET_DOC_LIMIT}件)")
+        print(f"   保有銘柄の直近のTDNET開示書類 (上位{total_docs}件)")
         print("-" * WIDTH)
 
         if not recent_portfolio_tdnet_docs:
@@ -611,12 +842,14 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
                 url = pdf_url
                 hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
-
                 styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
 
+                prefix = "  └─" if idx == total_docs else "  ├─"
+                indent = "     " if idx == total_docs else "  │  "
+
                 print(
-                    f"[{idx:2d}] {sec_code} {styled_company} | {disclosure_date} {disclosure_time}"
+                    f"{prefix} [{sec_code}] {styled_company} | {disclosure_date} {disclosure_time}"
                 )
-                print(f"      {title}")
-                print(f"   {styled_url}")
+                print(f"{indent} {title}")
+                print(f"{indent} {styled_url}")
     print("=" * WIDTH)

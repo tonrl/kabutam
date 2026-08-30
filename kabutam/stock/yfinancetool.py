@@ -16,15 +16,16 @@ def make_yahoo_ticker(code):
     return f"{code}.T"
 
 
-def fetch_prices(code, days=3, before_today=False, on_event=None):
+def fetch_prices(code, days=14, before_today=False, on_event=None):
 
     ticker = make_yahoo_ticker(code)
 
     stock = yf.Ticker(ticker)
+    fetch_days = max(days * 2, 30)
 
     # 休日を考慮して少し余裕を持たせる
     try:
-        df = stock.history(period="14d", interval="1d", auto_adjust=False)
+        df = stock.history(period=f"{fetch_days}d", interval="1d", auto_adjust=False)
     except Exception as e:  # noqa: BLE001
         if on_event:
             on_event(f" {code}: 株価取得エラー: {e}")

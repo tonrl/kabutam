@@ -228,6 +228,7 @@ def display_stock_info(stock_info, mode="normal"):
         return
 
     c = calculated
+
     if mode == "normal":
         print("-" * 67)
         print()
@@ -235,74 +236,75 @@ def display_stock_info(stock_info, mode="normal"):
         print(f"決算開示日     : {c['disclosure_date']}")
         print(f"会計年度       : {c['fiscal_year']}")
         print(f"四半期         : {c['quarter']}")
-        print()
-        print("バリュエーション")
-        print("-" * 60)
+    print()
+    print("バリュエーション")
+    print("-" * 60)
 
-        print(
-            f"PER            : {c['current_per']:.2f}倍"
-            if c["current_per"] is not None
-            else "PER            : -"
-        )
+    print(
+        f"PER            : {c['current_per']:.2f}倍"
+        if c["current_per"] is not None
+        else "PER            : -"
+    )
 
-        print(
-            f"PBR            : {c['current_pbr']:.2f}倍"
-            if c["current_pbr"] is not None
-            else "PBR            : -"
-        )
+    print(
+        f"PBR            : {c['current_pbr']:.2f}倍"
+        if c["current_pbr"] is not None
+        else "PBR            : -"
+    )
 
-        print(
-            f"EPS            : {c['eps']:.2f}円"
-            if c["eps"] is not None
-            else "EPS            : -"
-        )
+    print(
+        f"EPS            : {c['eps']:.2f}円"
+        if c["eps"] is not None
+        else "EPS            : -"
+    )
 
-        print(
-            f"BPS            : {c['bps']:.2f}円"
-            if c["bps"] is not None
-            else "BPS            : -"
-        )
+    print(
+        f"BPS            : {c['bps']:.2f}円"
+        if c["bps"] is not None
+        else "BPS            : -"
+    )
 
-        print(
-            f"ROE            : {c['roe'] * 100:.2f}%"
-            if c["roe"] is not None
-            else "ROE            : -"
-        )
+    print(
+        f"ROE            : {c['roe'] * 100:.2f}%"
+        if c["roe"] is not None
+        else "ROE            : -"
+    )
 
-        print()
-        print("配当")
-        print("-" * 60)
+    print()
+    print("配当")
+    print("-" * 60)
 
-        print(
-            f"配当利回り     : {c['current_dividend_yield'] * 100:.2f}%"
-            if c["current_dividend_yield"] is not None
-            else "配当利回り     : -"
-        )
+    print(
+        f"配当利回り     : {c['current_dividend_yield'] * 100:.2f}%"
+        if c["current_dividend_yield"] is not None
+        else "配当利回り     : -"
+    )
 
-        print(
-            f"年間配当実績   : {c['dividend_per_share']:.2f} 円"
-            if c["dividend_per_share"] is not None
-            else "年間配当実績   : -"
-        )
+    print(
+        f"年間配当実績   : {c['dividend_per_share']:.2f} 円"
+        if c["dividend_per_share"] is not None
+        else "年間配当実績   : -"
+    )
 
-        print(
-            f"中間配当       : {c['interim_dividend_per_share']:.2f} 円"
-            if c["interim_dividend_per_share"] is not None
-            else "中間配当       : -"
-        )
+    print(
+        f"中間配当       : {c['interim_dividend_per_share']:.2f} 円"
+        if c["interim_dividend_per_share"] is not None
+        else "中間配当       : -"
+    )
 
-        print(
-            f"期末配当       : {c['yearend_dividend_per_share']:.2f} 円"
-            if c["yearend_dividend_per_share"] is not None
-            else "期末配当       : -"
-        )
+    print(
+        f"期末配当       : {c['yearend_dividend_per_share']:.2f} 円"
+        if c["yearend_dividend_per_share"] is not None
+        else "期末配当       : -"
+    )
 
-        print(
-            f"予想年間配当   : {c['forecast_dividend_per_share']:.2f} 円"
-            if c["forecast_dividend_per_share"] is not None
-            else "予想年間配当   : -"
-        )
+    print(
+        f"予想年間配当   : {c['forecast_dividend_per_share']:.2f} 円"
+        if c["forecast_dividend_per_share"] is not None
+        else "予想年間配当   : -"
+    )
 
+    if mode == "normal":
         # 前年度実績
         print()
         print("通期実績")
@@ -451,8 +453,9 @@ def display_stock_info(stock_info, mode="normal"):
         print()
         print(f"DB最終確認     : {c['updated_at']}")
 
+    total_edinet = len(recent_edinet_docs)
     print("-" * 67)
-    print("   直近の開示書類 (EDINET)")
+    print(f"   直近の開示書類 (EDINET) [上位{total_edinet}件]")
     print("-" * 67)
 
     if not recent_edinet_docs:
@@ -463,11 +466,14 @@ def display_stock_info(stock_info, mode="normal"):
             url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
             hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
             styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
+            prefix = "  └─" if idx == total_edinet else "  ├─"
+            indent = "     " if idx == total_edinet else "  │  "
 
-            print(f"[{idx:2d}] {description}")
-            print(f"     {submit_dt}")
-            print(f"   {styled_url}")
+            print(f"{prefix} {submit_dt}")
+            print(f"{indent}  {description}")
+            print(f"{indent}  {styled_url}")
 
+    total_tdnet = len(recent_tdnet_docs)
     print()
     print("-" * 67)
     print("   直近の開示情報 (TDnet)")
@@ -483,12 +489,13 @@ def display_stock_info(stock_info, mode="normal"):
             pdf_url,
         ) in enumerate(recent_tdnet_docs, 1):
             hyperlink = f"\033]8;;{pdf_url}\033\\{pdf_url}\033]8;;\033\\"
-
             styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
+            prefix = "  └─" if idx == total_tdnet else "  ├─"
+            indent = "     " if idx == total_tdnet else "  │  "
 
-            print(f"[{idx:2d}] {title}")
-            print(f"     {disclosure_date} {disclosure_time}")
-            print(f"   {styled_url}")
+            print(f"{prefix} {disclosure_date} {disclosure_time}")
+            print(f"{indent}  {title}")
+            print(f"{indent}  {styled_url}")
     print("-" * 67)
 
 

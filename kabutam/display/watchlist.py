@@ -86,6 +86,24 @@ def get_watchlist_recent_tdnet_documents(conn, codes, limit=10):
     return cursor.fetchall()
 
 
+def calculate_change_rate(latest_price, base_price):
+    if latest_price is None or base_price is None:
+        return None
+
+    if base_price == 0:
+        return None
+
+    return (latest_price - base_price) / base_price * 100
+
+
+def format_change_rate(rate, width):
+    if rate is None:
+        return f"{'-':>{width}}"
+
+    text = f"{rate:+.2f}%"
+    return f"{text:>{width}}"
+
+
 def show_watchlist(conn, mode="normal"):
     """
     Watchlistに登録された銘柄をターミナルに表示する。
@@ -109,16 +127,16 @@ def show_watchlist(conn, mode="normal"):
 
     WIDTH_CODE = 8
     WIDTH_COMPANY = 25
-    WIDTH_DAILY_CHANGE = 16
-    WIDTH_PRICE = 14
+    WIDTH_CHANGE = 10
+    WIDTH_PRICE = 10
 
-    WIDTH = WIDTH_CODE + WIDTH_COMPANY + WIDTH_DAILY_CHANGE + WIDTH_PRICE
+    WIDTH = WIDTH_CODE + WIDTH_COMPANY + WIDTH_CHANGE * 5 + WIDTH_PRICE
 
     # --------------------------------------------------
     # EDINET / TDnet 表示件数
     # --------------------------------------------------
-    DOC_LIMIT = 8
-    TDNET_DOC_LIMIT = 8
+    DOC_LIMIT = 4
+    TDNET_DOC_LIMIT = 4
 
     # --------------------------------------------------
     # 企業名取得
@@ -143,6 +161,9 @@ def show_watchlist(conn, mode="normal"):
 
     latest_prices = {}
     previous_prices = {}
+    week_prices = {}
+    month_prices = {}
+    three_month_prices = {}
 
     current_ref = [0]
     status_ref = ["株価情報を更新しています"]
@@ -168,7 +189,7 @@ def show_watchlist(conn, mode="normal"):
             prices = ensure_recent_prices(
                 conn,
                 code,
-                2,
+                60,
                 on_event=on_price_event,
             )
 
@@ -177,10 +198,14 @@ def show_watchlist(conn, mode="normal"):
                 latest_prices[code] = prices[0][4]
 
                 # 前営業日
-                if len(prices) >= 2:
-                    previous_prices[code] = prices[1][4]
-                else:
-                    previous_prices[code] = None
+                # if len(prices) >= 2:
+                #     previous_prices[code] = prices[1][4]
+                # else:
+                #     previous_prices[code] = None
+                previous_prices[code] = prices[1][4] if len(prices) >= 2 else None
+                week_prices[code] = prices[5][4] if len(prices) >= 6 else None
+                month_prices[code] = prices[20][4] if len(prices) >= 21 else None
+                three_month_prices[code] = prices[59][4] if len(prices) >= 60 else None
 
             else:
                 latest_prices[code] = None
@@ -203,7 +228,11 @@ def show_watchlist(conn, mode="normal"):
     print(
         f"{'Code':<{WIDTH_CODE}}"
         f"{fit_text('Company', WIDTH_COMPANY)}"
-        f"{'Change':>{WIDTH_DAILY_CHANGE}}"
+        f"{'3 M':>{WIDTH_CHANGE}}"
+        f"{'1 M':>{WIDTH_CHANGE}}"
+        f"{'1 W':>{WIDTH_CHANGE}}"
+        f"{'1 D':>{WIDTH_CHANGE}}"
+        f"{'Change':>{WIDTH_CHANGE}}"
         f"{'Price':>{WIDTH_PRICE}}"
     )
 
@@ -222,39 +251,83 @@ def show_watchlist(conn, mode="normal"):
             if previous_price is not None:
                 daily_change = latest_price - previous_price
 
+                daily_change_rate = calculate_change_rate(latest_price, previous_price)
+
+                weekly_change_rate = calculate_change_rate(
+                    latest_price, week_prices.get(code)
+                )
+
+                monthly_change_rate = calculate_change_rate(
+                    latest_price, month_prices.get(code)
+                )
+                three_month_change_rate = calculate_change_rate(
+                    latest_price, three_month_prices.get(code)
+                )
+
                 daily_change_text = f"{daily_change:+,.0f}"
-                daily_change_text = f"{daily_change_text:>{WIDTH_DAILY_CHANGE}}"
+                daily_change_text = f"{daily_change_text:>{WIDTH_CHANGE}}"
+                # rate
+                daily_change_rate_text = format_change_rate(
+                    daily_change_rate, WIDTH_CHANGE
+                )
+                weekly_change_rate_text = format_change_rate(
+                    weekly_change_rate, WIDTH_CHANGE
+                )
+                monthly_change_rate_text = format_change_rate(
+                    monthly_change_rate, WIDTH_CHANGE
+                )
+                three_month_change_rate_text = format_change_rate(
+                    three_month_change_rate, WIDTH_CHANGE
+                )
 
                 daily_change_text = colorise_profit(
                     daily_change,
                     daily_change_text,
                 )
+                daily_change_rate_text = colorise_profit(
+                    daily_change_rate,
+                    daily_change_rate_text,
+                )
+                weekly_change_rate_text = colorise_profit(
+                    weekly_change_rate,
+                    weekly_change_rate_text,
+                )
+                monthly_change_rate_text = colorise_profit(
+                    monthly_change_rate,
+                    monthly_change_rate_text,
+                )
+                three_month_change_rate_text = colorise_profit(
+                    three_month_change_rate,
+                    three_month_change_rate_text,
+                )
 
             else:
-                daily_change_text = f"{'-':>{WIDTH_DAILY_CHANGE}}"
+                daily_change_text = f"{'-':>{WIDTH_CHANGE}}"
 
-            price_text = f"{latest_price:>{WIDTH_PRICE},.2f}"
+            price_text = f"{latest_price:>{WIDTH_PRICE},.0f}"
 
         else:
-            daily_change_text = f"{'-':>{WIDTH_DAILY_CHANGE}}"
+            daily_change_text = f"{'-':>{WIDTH_CHANGE}}"
             price_text = f"{'-':>{WIDTH_PRICE}}"
 
-        print(f"{code:<{WIDTH_CODE}}{company}{daily_change_text}{price_text}")
+        print(
+            f"{code:<{WIDTH_CODE}}{company}{three_month_change_rate_text}{monthly_change_rate_text}{weekly_change_rate_text}{daily_change_rate_text}{daily_change_text}{price_text}"
+        )
 
     # --------------------------------------------------
     # EDINET
     # --------------------------------------------------
 
     if mode in ("normal", "documents", "edinet"):
-        print("=" * WIDTH)
-        print(f"   登録銘柄の直近のEDINET開示書類 (上位{DOC_LIMIT}件)")
-        print("-" * WIDTH)
-
         recent_watchlist_edinet_docs = get_watchlist_recent_edinet_documents(
             conn,
             codes,
             limit=DOC_LIMIT,
         )
+        total_docs = len(recent_watchlist_edinet_docs)
+        print("=" * WIDTH)
+        print(f"   登録銘柄の直近のEDINET開示書類 (上位{total_docs}件)")
+        print("-" * WIDTH)
 
         if not recent_watchlist_edinet_docs:
             print("  直近の開示書類はありません。")
@@ -271,32 +344,29 @@ def show_watchlist(conn, mode="normal"):
                 1,
             ):
                 url = f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
-
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
+                styled_url = f"{FG_CYAN}{url}{RESET}"
+                prefix = "  └─" if idx == total_docs else "  ├─"
+                indent = "     " if idx == total_docs else "  │  "
 
-                hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
-
-                styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
-
-                print(f"[{idx:2d}] {stock_code} {styled_company} | {submit_dt}")
-
-                print(f"      {description}")
-                print(f"      {styled_url}")
+                print(f"{prefix} [{stock_code}] {styled_company} | {submit_dt}")
+                print(f"{indent} {description}")
+                print(f"{indent} {styled_url}")
 
     # --------------------------------------------------
     # TDnet
     # --------------------------------------------------
 
     if mode in ("normal", "documents", "tdnet"):
-        print("=" * WIDTH)
-        print(f"   登録銘柄の直近のTDnet開示書類 (上位{TDNET_DOC_LIMIT}件)")
-        print("-" * WIDTH)
-
         recent_watchlist_tdnet_docs = get_watchlist_recent_tdnet_documents(
             conn,
             codes,
             limit=TDNET_DOC_LIMIT,
         )
+        total_docs = len(recent_watchlist_tdnet_docs)
+        print("=" * WIDTH)
+        print(f"   登録銘柄の直近のTDnet開示書類 (上位{total_docs}件)")
+        print("-" * WIDTH)
 
         if not recent_watchlist_tdnet_docs:
             print("  直近の開示書類はありません。")
@@ -313,25 +383,19 @@ def show_watchlist(conn, mode="normal"):
                 recent_watchlist_tdnet_docs,
                 1,
             ):
-                company_name = company_names.get(
-                    sec_code,
-                    "不明",
-                )
-
+                company_name = company_names.get(sec_code, "不明")
                 styled_company = f"{BOLD}{FG_BRIGHT_WHITE}{company_name}{RESET}"
-
-                hyperlink = f"\033]8;;{pdf_url}\033\\{pdf_url}\033]8;;\033\\"
-
+                url = pdf_url
+                hyperlink = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
                 styled_url = f"{FG_CYAN}{hyperlink}{RESET}"
 
-                print(
-                    f"[{idx:2d}] "
-                    f"{sec_code} "
-                    f"{styled_company} "
-                    f"| {disclosure_date} {disclosure_time}"
-                )
+                prefix = "  └─" if idx == total_docs else "  ├─"
+                indent = "     " if idx == total_docs else "  │  "
 
-                print(f"      {title}")
-                print(f"      {styled_url}")
+                print(
+                    f"{prefix} [{sec_code}] {styled_company} | {disclosure_date} {disclosure_time}"
+                )
+                print(f"{indent} {title}")
+                print(f"{indent} {styled_url}")
 
     print("=" * WIDTH)

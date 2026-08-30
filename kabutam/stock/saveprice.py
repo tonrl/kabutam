@@ -11,6 +11,50 @@ JST = ZoneInfo("Asia/Tokyo")
 
 PRICE_UPDATE_TIME = time(16, 30)
 FETCH_DAYS = 14
+DISPLAY_DAYS = 2
+
+
+def get_recent_prices_bulk(conn, codes, days=2):
+    if not codes or days <= 0:
+        return {}
+
+    placeholders = ",".join("?" for _ in codes)
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            Code,
+            Date,
+            Open,
+            High,
+            Low,
+            Close,
+            Volume,
+            AdjOpen,
+            AdjHigh,
+            AdjLow,
+            AdjClose,
+            AdjVolume
+        FROM prices
+        WHERE Code IN ({placeholders})
+            AND Close IS NOT NULL
+        ORDER BY Code, Date DESC
+        """,
+        codes,
+    ).fetchall()
+
+    result = {}
+
+    for row in rows:
+        code = str(row[0])
+
+        if code not in result:
+            result[code] = []
+
+        if len(result[code]) < days:
+            result[code].append(row[1:])
+
+    return result
 
 
 def get_recent_prices(conn, code, days=3):
@@ -41,6 +85,32 @@ def get_recent_prices(conn, code, days=3):
     """,
         (code, days),
     ).fetchall()
+
+
+def get_latest_price_dates_bulk(conn, codes):
+    if not codes:
+        return {}
+
+    placeholders = ",".join("?" for _ in codes)
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            Code,
+            MAX(Date)
+        FROM prices
+        WHERE Code IN ({placeholders})
+            AND Close IS NOT NULL
+        GROUP BY Code
+        """,
+        codes,
+    ).fetchall()
+
+    return {
+        code: date.fromisoformat(latest_date)
+        for code, latest_date in rows
+        if latest_date is not None
+    }
 
 
 def get_latest_price_date(conn, code):
@@ -139,24 +209,78 @@ def expected_latest_close_date(now=None):
     return target
 
 
-def ensure_recent_prices(conn, code, days=3, on_event=None):
+def ensure_recent_prices_bulk(conn, codes, days=FETCH_DAYS, on_event=None):
+    """
+    複数銘柄の最新株価をDB上で保証する。
+    Returns:
+        dict[Code, list[row]]
+    """
+
+    if not codes:
+        return {}
+
+    now = datetime.now(JST)
+    target = expected_latest_close_date(now)
+
+    latest_dates = get_latest_price_dates_bulk(conn, codes)
+
+    stale_codes = []
+
+    for code in codes:
+        latest_date = latest_dates.get(code)
+        row = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM prices
+            WHERE Code = ?
+              AND Close IS NOT NULL
+            """,
+            (code,),
+        ).fetchone()
+        stored_days = row[0] if row else 0
+
+        if latest_date is None or latest_date < target or stored_days < days:
+            stale_codes.append(code)
+
+    total = len(stale_codes)
+
+    for index, code in enumerate(stale_codes, 1):
+        if on_event:
+            on_event(f" 株価情報を更新しています ({index}/{total}) {code}")
+
+        ensure_recent_prices(conn, code, days, on_event=on_event)
+
+    return get_recent_prices_bulk(conn, codes, days)
+
+
+def ensure_recent_prices(conn, code, days=FETCH_DAYS, on_event=None):
     """
     DBの株価が古ければyfinanceから更新する。
     CloseがNULLの当日データは終値として使用しない
     16:30以降:
         当日の確定終値がDBになければ更新を試みる。
     """
+    row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM prices
+        WHERE Code = ?
+          AND Close IS NOT NULL
+        """,
+        (code,),
+    ).fetchone()
+    stored_days = row[0] if row else 0
 
     now = datetime.now(JST)
     target = expected_latest_close_date(now)
     latest_date = get_latest_price_date(conn, code)
 
     # time_tool.sleep(1)
-    if latest_date is None or latest_date < target:
+    if latest_date is None or latest_date < target or stored_days < days:
         update_prices(
             conn,
             code,
-            days=FETCH_DAYS,
+            days,
             before_today=now.time() < PRICE_UPDATE_TIME,
             on_event=on_event,
         )
