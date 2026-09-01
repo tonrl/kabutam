@@ -161,16 +161,15 @@ def get_portfolio_sector_allocation(conn, holdings, latest_prices, previous_pric
 
     return allocation
 
-
-def print_portfolio_summary(
-    total_cost,
-    total_value,
-    total_priced_cost,
-    total_previous_value,
-    total_daily_profit,
-    total_dividend_pre_tax,
-    total_dividend_post_tax,
-    unpriced_count,
+def calculate_portfolio_summary(
+        total_cost,
+        total_value,
+        total_priced_cost,
+        total_previous_value,
+        total_daily_profit,
+        total_dividend_pre_tax,
+        total_dividend_post_tax,
+        unpriced_count,
 ):
     # -------------損益-----------------------
     unrealised_profit = total_value - total_priced_cost
@@ -193,6 +192,36 @@ def print_portfolio_summary(
     yield_on_value = (
         total_dividend_pre_tax / total_value * 100 if total_value > 0 else None
     )
+
+    return {
+            "total_cost": total_cost,
+            "total_value": total_value,
+            "unpriced_count": unpriced_count,
+            "total_priced_cost": total_priced_cost,
+            "total_previous_value": total_previous_value,
+            "daily_profit": daily_profit,
+            "daily_profit_rate": daily_profit_rate,
+            "unrealised_profit": unrealised_profit,
+            "unrealised_profit_rate": unrealised_profit_rate,
+            "total_dividend_pre_tax": total_dividend_pre_tax,
+            "total_dividend_post_tax": total_dividend_post_tax,
+            "yield_on_cost": yield_on_cost,
+            "yield_on_value": yield_on_value,
+            "unpriced_count": unpriced_count,
+    }
+
+def print_portfolio_summary(summary):
+    total_cost = summary["total_cost"]
+    total_value = summary["total_value"]
+    unpriced_count = summary["unpriced_count"]
+    daily_profit = summary["daily_profit"]
+    daily_profit_rate = summary["daily_profit_rate"]
+    unrealised_profit = summary["unrealised_profit"]
+    unrealised_profit_rate = summary["unrealised_profit_rate"]
+    total_dividend_pre_tax = summary["total_dividend_pre_tax"]
+    total_dividend_post_tax = summary["total_dividend_post_tax"]
+    yield_on_cost = summary["yield_on_cost"]
+    yield_on_value = summary["yield_on_value"]
 
     # ------------------------------------------
     # 表示用文字列作成
@@ -754,16 +783,19 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # 集計
     # --------------------------------------------------
     if mode in ("normal", "minimal"):
-        print_portfolio_summary(
-            total_cost=total_cost,
-            total_value=total_value,
-            total_priced_cost=total_priced_cost,
-            total_previous_value=total_previous_value,
-            total_daily_profit=total_daily_profit,
-            total_dividend_pre_tax=total_dividend_pre_tax,
-            total_dividend_post_tax=total_dividend_post_tax,
-            unpriced_count=unpriced_count,
+        summary = calculate_portfolio_summary(
+                total_cost=total_cost,
+                total_value=total_value,
+                total_priced_cost=total_priced_cost,
+                total_previous_value=total_previous_value,
+                total_daily_profit=total_daily_profit,
+                total_dividend_pre_tax=total_dividend_pre_tax,
+                total_dividend_post_tax=total_dividend_post_tax,
+                unpriced_count=unpriced_count,
         )
+
+
+        print_portfolio_summary(summary)
 
         if mode != "minimal":
             print_sector_allocation(
