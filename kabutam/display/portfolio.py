@@ -196,7 +196,6 @@ def calculate_portfolio_summary(
     return {
             "total_cost": total_cost,
             "total_value": total_value,
-            "unpriced_count": unpriced_count,
             "total_priced_cost": total_priced_cost,
             "total_previous_value": total_previous_value,
             "daily_profit": daily_profit,
@@ -369,6 +368,63 @@ def print_sector_allocation(conn, holdings, latest_prices, previous_prices, widt
             f"{profit_text}"
         )
 
+def calculate_portfolio_row(
+        code,
+        account_type,
+        holding,
+        latest_price,
+        previous_price,
+        forecast_dividend,
+):
+    shares = holding["shares"]
+    average_price = holding["average_price"]
+
+    cost = shares * average_price
+
+
+    if latest_price is not None:
+        value = shares * latest_price
+        profit = (latest_price - average_price) * shares
+
+        # 前営業日の保有株評価額
+        if previous_price is not None:
+            daily_profit = (latest_price - previous_price) * shares
+            previous_value = shares * previous_price
+        else:
+            daily_profit = None
+            previous_value = 0
+    else:
+        value = None
+        profit = None
+        daily_profit = None
+        previous_value = 0
+
+
+    if forecast_dividend is not None:
+        dividend_pre_tax = shares * forecast_dividend
+        # NISA口座は非課税(0%)、その他は20.315%
+        is_nisa = "NISA" in account_type.upper()
+        tax_rate = 0.0 if is_nisa else 0.20315
+        dividend_post_tax = dividend_pre_tax * (1 - tax_rate)
+    else:
+        dividend_pre_tax = 0
+        dividend_post_tax = 0
+
+    return {
+            "code": code,
+            "account_type": account_type,
+            "shares": shares,
+            "average_price": average_price,
+            "cost": cost,
+            "latest_price": latest_price,
+            "value": value,
+            "profit": profit,
+            "daily_profit": daily_profit,
+            "previous_value": previous_value,
+            "dividend_pre_tax": dividend_pre_tax,
+            "dividend_post_tax": dividend_post_tax,
+            "priced": latest_price is not None,
+    }
 
 def show_portfolio_csv(conn):
 
@@ -685,62 +741,65 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
             # --------------------------------------------------
             # 口座ごとに表示
             # --------------------------------------------------
-
             for account_type, holding in accounts.items():
-                shares = holding["shares"]
-                average_price = holding["average_price"]
 
-                cost = shares * average_price
-                total_cost += cost
+                row = calculate_portfolio_row(
+                        code=code,
+                        account_type=account_type,
+                        holding=holding,
+                        latest_price=latest_price,
+                        previous_price=previous_price,
+                        forecast_dividend=forecast_dividend,
+                )
+                # PF全体の合計
+                total_cost += row["cost"]
 
-                if latest_price is not None:
-                    value = shares * latest_price
-                    total_value += value
-                    total_priced_cost += cost
+                if row["value"] is not None:
+                    total_value += row["value"]
+                    total_priced_cost += row["cost"]
 
-                    profit = (latest_price - average_price) * shares
+                if row["daily_profit"] is not None:
+                    total_daily_profit += row["daily_profit"]
+                    total_previous_value += row["previous_value"]
 
-                    # 前営業日の保有株評価額
-                    if previous_price is not None:
-                        daily_profit = (latest_price - previous_price) * shares
-                        total_daily_profit += daily_profit
-                        total_previous_value += shares * previous_price
-                        # previous_value = shares * previous_price
-                        # total_previous_value += previous_value
-                    # profit = (latest_price - average_price) * shares
-                    else:
-                        daily_profit = None
+                total_dividend_pre_tax += row["dividend_pre_tax"]
+                total_dividend_post_tax += row["dividend_post_tax"]
 
-                    profit_text = f"{profit:+,.0f}"
-                    profit_text = f"{profit_text:>16}"
-                    profit_text = colorise_profit(profit, profit_text)
-
-                    if daily_profit is not None:
-                        daily_profit_text = f"{daily_profit:+,.0f}"
-                        daily_profit_text = f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
-                        daily_profit_text = colorise_profit(
-                            daily_profit, daily_profit_text
-                        )
-                    else:
-                        daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
-
-                else:
-                    value = None
-                    profit = None
-                    daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
+                if not row["priced"]:
                     unpriced_count += 1
 
-                # 配当金・税金計算
-                if forecast_dividend is not None:
-                    div_pre_tax = shares * forecast_dividend
-                    # NISA口座は非課税(0%)、その他は20.315%
-                    is_nisa = "NISA" in account_type.upper()
-                    tax_rate = 0.0 if is_nisa else 0.20315
-                    div_post_tax = div_pre_tax * (1 - tax_rate)
-                    total_dividend_pre_tax += div_pre_tax
-                    total_dividend_post_tax += div_post_tax
+                # 表示
+                shares = row["shares"]
+                average_price = row["average_price"]
+                latest_price = row["latest_price"]
+                value = row["value"]
 
-                if value is not None:
+                daily_profit = row["daily_profit"]
+                profit = row["profit"]
+
+                if daily_profit is not None:
+                    daily_profit_text = f"{daily_profit:+,.0f}"
+                    daily_profit_text = (
+                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
+                    )
+                    daily_profit_text = colorise_profit(
+                            daily_profit,
+                            daily_profit_text,
+                    )
+                else:
+                    daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
+
+                if profit is not None:
+                    profit_text = f"{profit:+,.0f}"
+                    profit_text = f"{profit_text:>16}"
+                    profit_text = colorise_profit(
+                            profit,
+                            profit_text
+                    )
+                else:
+                    profit_text = f"{'-':>{WIDTH_PROFIT}}"
+
+                if row["value"] is not None:
                     if mode == "minimal":
                         print(
                             f"{code:<{WIDTH_CODE}}"
