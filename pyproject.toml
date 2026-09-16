@@ -16,7 +16,8 @@ dependencies = [
     "platformdirs",
     "argcomplete",
     "beautifulsoup4",
-    "pandas"
+    "pandas",
+    "rich"
 
 ]
 

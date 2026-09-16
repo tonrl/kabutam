@@ -1,7 +1,19 @@
 import csv
 import sys
 import threading
+from datetime import date, datetime, timedelta, timezone
 
+from dateutil.relativedelta import relativedelta
+
+from kabutam.ai.portfolio import (
+    analyze_portfolio,
+    build_portfolio_analysis_input,
+)
+from kabutam.analysis.portfolio import (
+    calculate_portfolio_row,
+    calculate_portfolio_summary,
+    calculate_sector_allocation,
+)
 from kabutam.animations.spinners import show_spinner
 from kabutam.db.portfolio import get_holdings
 from kabutam.db.schema import create_table_corp_data
@@ -12,7 +24,9 @@ from kabutam.edinet.get_irdoc_list import sync_recent_edinet_doc_list
 from kabutam.stock.saveprice import ensure_recent_prices, ensure_recent_prices_bulk
 from kabutam.tdnet.sync_tdnet import sync_recent_tdnet
 
-DISPLAY_DAYS = 2
+JST = timezone(timedelta(hours=9))
+
+DISPLAY_DAYS = 100
 MAX_SECTORS = 6
 # スタイルの定義
 RESET = "\033[0m"
@@ -86,135 +100,16 @@ def get_portfolio_recent_tdnet_documents(conn, codes, limit=3):
     return cursor.fetchall()
 
 
-def get_portfolio_sector_allocation(conn, holdings, latest_prices, previous_prices):
-    """
-    ポートフォリオの33業種別構成比を取得する。
-
-    """
-    sector_data = {}
-
-    for code, accounts in holdings.items():
-        latest_price = latest_prices.get(code)
-        previous_price = previous_prices.get(code)
-
-        if latest_price is None:
-            continue
-
-        row = conn.execute(
-            """
-            SELECT S33Nm
-            FROM equities_master
-            WHERE Code = ?
-            """,
-            (code,),
-        ).fetchone()
-
-        sector_name = row[0] if row and row[0] else "業種不明"
-        shares = sum(holding["shares"] for holding in accounts.values())
-        value = shares * latest_price
-        profit = sum(
-            (latest_price - holding["average_price"]) * holding["shares"]
-            for holding in accounts.values()
-        )
-
-        # 前日比
-        daily_profit = None
-
-        if previous_price is not None:
-            daily_profit = (latest_price - previous_price) * shares
-
-        if sector_name not in sector_data:
-            sector_data[sector_name] = {
-                "value": 0,
-                "profit": 0,
-                "daily_profit": 0,
-                "has_daily_profit": False,
-            }
-
-        sector_data[sector_name]["value"] += value
-        sector_data[sector_name]["profit"] += profit
-
-        if daily_profit is not None:
-            sector_data[sector_name]["daily_profit"] += daily_profit
-            sector_data[sector_name]["has_daily_profit"] = True
-
-    total_value = sum(data["value"] for data in sector_data.values())
-    if total_value <= 0:
-        return []
-
-    allocation = []
-
-    for sector, data in sector_data.items():
-        weight = data["value"] / total_value * 100
-
-        allocation.append(
-            (
-                sector,
-                data["value"],
-                weight,
-                data["profit"],
-                data["daily_profit"],
-                data["has_daily_profit"],
-            )
-        )
-    allocation.sort(key=lambda x: x[1], reverse=True)
-
-    return allocation
-
-def calculate_portfolio_summary(
-        total_cost,
-        total_value,
-        total_priced_cost,
-        total_previous_value,
-        total_daily_profit,
-        total_dividend_pre_tax,
-        total_dividend_post_tax,
-        unpriced_count,
-):
-    # -------------損益-----------------------
-    unrealised_profit = total_value - total_priced_cost
-    daily_profit = total_daily_profit
-
-    # -------------損益率---------------------
-    daily_profit_rate = (
-        daily_profit / total_previous_value * 100 if total_previous_value > 0 else None
-    )
-
-    unrealised_profit_rate = (
-        unrealised_profit / total_priced_cost * 100 if total_priced_cost > 0 else None
-    )
-
-    # -------------配当利回り-----------------
-    yield_on_cost = (
-        total_dividend_pre_tax / total_cost * 100 if total_cost > 0 else None
-    )
-
-    yield_on_value = (
-        total_dividend_pre_tax / total_value * 100 if total_value > 0 else None
-    )
-
-    return {
-            "total_cost": total_cost,
-            "total_value": total_value,
-            "total_priced_cost": total_priced_cost,
-            "total_previous_value": total_previous_value,
-            "daily_profit": daily_profit,
-            "daily_profit_rate": daily_profit_rate,
-            "unrealised_profit": unrealised_profit,
-            "unrealised_profit_rate": unrealised_profit_rate,
-            "total_dividend_pre_tax": total_dividend_pre_tax,
-            "total_dividend_post_tax": total_dividend_post_tax,
-            "yield_on_cost": yield_on_cost,
-            "yield_on_value": yield_on_value,
-            "unpriced_count": unpriced_count,
-    }
-
 def print_portfolio_summary(summary):
     total_cost = summary["total_cost"]
     total_value = summary["total_value"]
     unpriced_count = summary["unpriced_count"]
     daily_profit = summary["daily_profit"]
     daily_profit_rate = summary["daily_profit_rate"]
+    monthly_profit = summary["monthly_profit"]
+    monthly_profit_rate = summary["monthly_profit_rate"]
+    three_month_profit = summary["three_month_profit"]
+    three_month_profit_rate = summary["three_month_profit_rate"]
     unrealised_profit = summary["unrealised_profit"]
     unrealised_profit_rate = summary["unrealised_profit_rate"]
     total_dividend_pre_tax = summary["total_dividend_pre_tax"]
@@ -237,6 +132,41 @@ def print_portfolio_summary(summary):
             f"{daily_profit_rate:+.2f}%",
         )
         if daily_profit_rate is not None
+        else "-"
+    )
+    monthly_pl_text = (
+        colorise_profit(
+            monthly_profit,
+            f"{monthly_profit:+,.0f} 円",
+        )
+        if monthly_profit is not None
+        else "-"
+    )
+
+    monthly_pl_rate_text = (
+        colorise_profit(
+            monthly_profit_rate,
+            f"{monthly_profit_rate:+.2f}%",
+        )
+        if monthly_profit_rate is not None
+        else "-"
+    )
+
+    three_month_pl_text = (
+        colorise_profit(
+            three_month_profit,
+            f"{three_month_profit:+,.0f} 円",
+        )
+        if three_month_profit is not None
+        else "-"
+    )
+
+    three_month_pl_rate_text = (
+        colorise_profit(
+            three_month_profit_rate,
+            f"{three_month_profit_rate:+.2f}%",
+        )
+        if three_month_profit_rate is not None
         else "-"
     )
 
@@ -269,6 +199,8 @@ def print_portfolio_summary(summary):
     if unpriced_count:
         print(f"{FG_GRAY}※ 株価未取得: {unpriced_count} 件 (保有資産から除外){RESET}")
     print(f"前営業日比        : {daily_pl_text} ({daily_pl_rate_text})")
+    print(f"前月比            : {monthly_pl_text} ({monthly_pl_rate_text})")
+    print(f"3か月前比         : {three_month_pl_text} ({three_month_pl_rate_text})")
 
     print(f"評価損益          : {unrealised_pl_text} ({unrealised_pl_rate_text})")
 
@@ -280,12 +212,14 @@ def print_portfolio_summary(summary):
     print(f"年間配当（税引後）: {total_dividend_post_tax:,.0f} 円")
 
 
-def print_sector_allocation(conn, holdings, latest_prices, previous_prices, width=60):
-    allocation = get_portfolio_sector_allocation(
-        conn,
+def print_sector_allocation(
+    holdings, latest_prices, previous_prices, sector_names, width=60
+):
+    allocation = calculate_sector_allocation(
         holdings,
         latest_prices,
         previous_prices,
+        sector_names,
     )
 
     if not allocation:
@@ -325,7 +259,6 @@ def print_sector_allocation(conn, holdings, latest_prices, previous_prices, widt
     SECTOR_WIDTH = 15
     BAR_WIDTH = 32
 
-    print("-" * width)
     print(f"{'セクター構成':<{SECTOR_WIDTH}}[{sector_count}業種 / {stock_count}銘柄]")
     print("-" * width)
     print(
@@ -367,64 +300,8 @@ def print_sector_allocation(conn, holdings, latest_prices, previous_prices, widt
             f"{daily_profit_text} "
             f"{profit_text}"
         )
+    print("-" * width)
 
-def calculate_portfolio_row(
-        code,
-        account_type,
-        holding,
-        latest_price,
-        previous_price,
-        forecast_dividend,
-):
-    shares = holding["shares"]
-    average_price = holding["average_price"]
-
-    cost = shares * average_price
-
-
-    if latest_price is not None:
-        value = shares * latest_price
-        profit = (latest_price - average_price) * shares
-
-        # 前営業日の保有株評価額
-        if previous_price is not None:
-            daily_profit = (latest_price - previous_price) * shares
-            previous_value = shares * previous_price
-        else:
-            daily_profit = None
-            previous_value = 0
-    else:
-        value = None
-        profit = None
-        daily_profit = None
-        previous_value = 0
-
-
-    if forecast_dividend is not None:
-        dividend_pre_tax = shares * forecast_dividend
-        # NISA口座は非課税(0%)、その他は20.315%
-        is_nisa = "NISA" in account_type.upper()
-        tax_rate = 0.0 if is_nisa else 0.20315
-        dividend_post_tax = dividend_pre_tax * (1 - tax_rate)
-    else:
-        dividend_pre_tax = 0
-        dividend_post_tax = 0
-
-    return {
-            "code": code,
-            "account_type": account_type,
-            "shares": shares,
-            "average_price": average_price,
-            "cost": cost,
-            "latest_price": latest_price,
-            "value": value,
-            "profit": profit,
-            "daily_profit": daily_profit,
-            "previous_value": previous_value,
-            "dividend_pre_tax": dividend_pre_tax,
-            "dividend_post_tax": dividend_post_tax,
-            "priced": latest_price is not None,
-    }
 
 def show_portfolio_csv(conn):
 
@@ -516,6 +393,8 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     total_priced_cost = 0
     total_previous_value = 0
     total_daily_profit = 0
+    total_month_previous_value = 0
+    total_three_month_previous_value = 0
     unpriced_count = 0
     total_dividend_pre_tax = 0
     total_dividend_post_tax = 0
@@ -574,6 +453,13 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # --------------------------------------------------
     latest_prices = {}
     previous_prices = {}
+    month_previous_prices = {}
+    three_month_previous_prices = {}
+
+    today = datetime.now(JST).date()
+    first_day_of_month = today.replace(day=1)
+    month_end = first_day_of_month - timedelta(days=1)
+    three_month_target = today - relativedelta(months=3)
 
     codes = list(holdings.keys())
     total_codes = len(codes)
@@ -610,17 +496,36 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
     for code in codes:
         prices = price_data.get(str(code), [])
+        latest_prices[code] = None
+        previous_prices[code] = None
+        month_previous_prices[code] = None
+        three_month_previous_prices[code] = None
 
-        if prices:
-            latest_prices[code] = prices[0][4]
+        if not prices:
+            continue
 
-            if len(prices) >= 2:
-                previous_prices[code] = prices[1][4]
-            else:
-                previous_prices[code] = None
-        else:
-            latest_prices[code] = None
-            previous_prices[code] = None
+        # 最新日
+        latest_prices[code] = prices[0][4]
+
+        # 前営業日
+        if len(prices) >= 2:
+            previous_prices[code] = prices[1][4]
+
+        # 前月末・3か月前の株価
+        for price_row in prices:
+            price_date = date.fromisoformat(price_row[0])
+            close = price_row[4]
+
+            # 前月末以前で最も新しい営業日
+            if month_previous_prices[code] is None and price_date <= month_end:
+                month_previous_prices[code] = close
+
+            # 3か月前以前で最も新しい営業日
+            if (
+                three_month_previous_prices[code] is None
+                and price_date <= three_month_target
+            ):
+                three_month_previous_prices[code] = close
 
     # --------------------------------------------------
     # 表示前に全銘柄の配当情報（EDINETデータ）を取得
@@ -686,13 +591,17 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     placeholders = ",".join("?" for _ in codes)
     rows = conn.execute(
         f"""
-            SELECT Code, CoName
+            SELECT Code, CoName, S33Nm
             FROM equities_master
             WHERE Code IN ({placeholders})
             """,
         codes,
     ).fetchall()
-    company_names = dict(rows)
+    company_names = {code: company_name for code, company_name, _ in rows}
+    sector_names = {
+        code: sector_name if sector_name else "業種不明"
+        for code, _, sector_name in rows
+    }
 
     # -----------------------------------------------------
 
@@ -736,20 +645,23 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
             latest_price = latest_prices.get(code)
             previous_price = previous_prices.get(code)
+            month_previous_price = month_previous_prices.get(code)
+            three_month_previous_price = three_month_previous_prices.get(code)
             forecast_dividend = forecast_dividends.get(code)
 
             # --------------------------------------------------
             # 口座ごとに表示
             # --------------------------------------------------
             for account_type, holding in accounts.items():
-
                 row = calculate_portfolio_row(
-                        code=code,
-                        account_type=account_type,
-                        holding=holding,
-                        latest_price=latest_price,
-                        previous_price=previous_price,
-                        forecast_dividend=forecast_dividend,
+                    code=code,
+                    account_type=account_type,
+                    holding=holding,
+                    latest_price=latest_price,
+                    previous_price=previous_price,
+                    month_previous_price=month_previous_price,
+                    three_month_previous_price=three_month_previous_price,
+                    forecast_dividend=forecast_dividend,
                 )
                 # PF全体の合計
                 total_cost += row["cost"]
@@ -762,6 +674,16 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                     total_daily_profit += row["daily_profit"]
                     total_previous_value += row["previous_value"]
 
+                shares = row["shares"]
+
+                if month_previous_price is not None:
+                    total_month_previous_value += month_previous_price * shares
+
+                if three_month_previous_price is not None:
+                    total_three_month_previous_value += (
+                        three_month_previous_price * shares
+                    )
+
                 total_dividend_pre_tax += row["dividend_pre_tax"]
                 total_dividend_post_tax += row["dividend_post_tax"]
 
@@ -769,7 +691,6 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                     unpriced_count += 1
 
                 # 表示
-                shares = row["shares"]
                 average_price = row["average_price"]
                 latest_price = row["latest_price"]
                 value = row["value"]
@@ -779,12 +700,10 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
 
                 if daily_profit is not None:
                     daily_profit_text = f"{daily_profit:+,.0f}"
-                    daily_profit_text = (
-                            f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
-                    )
+                    daily_profit_text = f"{daily_profit_text:>{WIDTH_DAILY_PROFIT}}"
                     daily_profit_text = colorise_profit(
-                            daily_profit,
-                            daily_profit_text,
+                        daily_profit,
+                        daily_profit_text,
                     )
                 else:
                     daily_profit_text = f"{'-':>{WIDTH_DAILY_PROFIT}}"
@@ -792,10 +711,7 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
                 if profit is not None:
                     profit_text = f"{profit:+,.0f}"
                     profit_text = f"{profit_text:>16}"
-                    profit_text = colorise_profit(
-                            profit,
-                            profit_text
-                    )
+                    profit_text = colorise_profit(profit, profit_text)
                 else:
                     profit_text = f"{'-':>{WIDTH_PROFIT}}"
 
@@ -843,27 +759,52 @@ def show_portfolio(conn, mode="normal", sort_by="shares"):
     # --------------------------------------------------
     if mode in ("normal", "minimal"):
         summary = calculate_portfolio_summary(
-                total_cost=total_cost,
-                total_value=total_value,
-                total_priced_cost=total_priced_cost,
-                total_previous_value=total_previous_value,
-                total_daily_profit=total_daily_profit,
-                total_dividend_pre_tax=total_dividend_pre_tax,
-                total_dividend_post_tax=total_dividend_post_tax,
-                unpriced_count=unpriced_count,
+            total_cost=total_cost,
+            total_value=total_value,
+            total_priced_cost=total_priced_cost,
+            total_previous_value=total_previous_value,
+            total_daily_profit=total_daily_profit,
+            total_month_previous_value=total_month_previous_value,
+            total_three_month_previous_value=total_three_month_previous_value,
+            total_dividend_pre_tax=total_dividend_pre_tax,
+            total_dividend_post_tax=total_dividend_post_tax,
+            unpriced_count=unpriced_count,
         )
-
-
-        print_portfolio_summary(summary)
+        sector_allocation = calculate_sector_allocation(
+            holdings,
+            latest_prices,
+            previous_prices,
+            sector_names,
+        )
 
         if mode != "minimal":
             print_sector_allocation(
-                conn,
                 holdings,
                 latest_prices,
                 previous_prices,
+                sector_names,
                 width=WIDTH,
             )
+
+        print_portfolio_summary(summary)
+
+        ai_data = build_portfolio_analysis_input(
+            holdings=holdings,
+            latest_prices=latest_prices,
+            previous_prices=previous_prices,
+            month_previous_prices=month_previous_prices,
+            three_month_previous_prices=three_month_previous_prices,
+            forecast_dividends=forecast_dividends,
+            company_names=company_names,
+            sector_names=sector_names,
+            summary=summary,
+            sector_allocation=sector_allocation,
+        )
+        print("-" * WIDTH)
+        print("AIポートフォリオ分析")
+        print("-" * WIDTH)
+        analyze_portfolio(ai_data)
+        # print(analysis)
 
     # ── 既存の配当金などの表示が終わったあとに追加 ──
     if mode == "documents":
